@@ -36,7 +36,8 @@ name="lunar-browser-$version-windows-$arch"
 iscc="/c/Program Files (x86)/Inno Setup 6/ISCC.exe"
 if [ ! -f "$iscc" ]; then choco install innosetup -y --no-progress >/dev/null; fi
 inno_arch=$([ "$arch" = "x86_64" ] && echo x64compatible || echo arm64)
-"$iscc" -Q \
+# Git Bash would turn the /D... switches into file paths; pass them as written.
+MSYS2_ARG_CONV_EXCL='*' "$iscc" /Q \
   "/DSourceDir=$(cygpath -w "$app")" \
   "/DAppVersion=$version" \
   "/DArch=$inno_arch" \

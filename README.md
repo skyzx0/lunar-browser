@@ -1,70 +1,79 @@
 # Lunar Browser
 
-LibreWolf, with Lunar's protections locked on, LibreWolf's own privacy search
-engines (without DuckDuckGo) and an ASCII look. For macOS, Windows and Linux.
+An independent web browser with its own engine. Not a fork, reskin or
+wrapper of Chromium, Firefox, WebKit or any other browser: Lunar parses
+HTML, lays pages out and talks to the network with its own code, and draws
+every page as text in the VT323 terminal font. For macOS, Windows and Linux.
 
-    lunar/lunar.cfg        Lunar's settings, added after LibreWolf's own
-    lunar/policies.json    Lunar's policies, merged over LibreWolf's
-    lunar/theme/           the ASCII theme: browser UI, new tab page, art
-    lunar/branding/        icons and the VT323 font
-    lunar/windows/         the Windows installer
-    scripts/brand.py       LibreWolf install -> Lunar (the same on every OS)
-    scripts/package-*.sh   unpack LibreWolf, brand it, package it per OS
-    .github/workflows/     builds all of it and publishes a release
+    src/engine/html.rs      HTML parser: forgiving, drops scripts and styles
+    src/engine/doc.rs       document model: blocks, links, form fields
+    src/engine/layout.rs    lays a page out on a character grid
+    src/net/http.rs         HTTP/1.1 client: HTTPS only, memory-only cookies
+    src/net/dns.rs          DNS over HTTPS (Cloudflare, Quad9), no plaintext DNS
+    src/app.rs              the window: tabs, toolbar, settings bar, page view
+    src/pages.rs            Lunar's own pages (new tab, errors)
+    scripts/                packaging for each system
+    .github/workflows/      builds everything and publishes a release
 
-## Building
+Libraries do the jobs that aren't a browser's: drawing the window and text
+(egui/eframe), TLS encryption (rustls, with Mozilla's root certificates),
+URL parsing, gzip, and reading DNS answers (JSON).
 
-On GitHub: Actions > Build Lunar Browser > Run workflow. It takes LibreWolf's
-latest official release (or the version you type in), checks it against
-LibreWolf's checksum, and publishes a release with:
+## What it does, and doesn't
 
-    macOS    lunar-browser-<v>-macos-arm64.dmg / -x86_64.dmg
-    Windows  lunar-browser-<v>-windows-x86_64-setup.exe / -portable.zip (and arm64)
-    Linux    lunar-browser-<v>-linux-x86_64.deb / .tar.xz (and arm64)
+Works well on pages that are HTML first: Wikipedia, search results (Brave
+Search, Ecosia), documentation, blogs, news sites, forums, plain-HTML
+forms and logins.
 
-On a Mac, from a LibreWolf .dmg:
-
-    ./scripts/package-mac.sh librewolf-<v>-macos-arm64-package.dmg out/lunar.dmg
+Doesn't run JavaScript, apply CSS or load images, so web apps (YouTube,
+Gmail, maps, chats) and pages that only show content through JavaScript
+won't work. That's the trade for the protections below.
 
 ## Protections, always on
 
-Locked, so they can't be turned off in Settings or about:config:
+- **No JavaScript, ever**: no scripts to exploit, track you or fingerprint you
+- **Only the page itself is fetched**: no images, scripts, fonts, ads,
+  trackers or any third-party request
+- **HTTPS only**: http:// is upgraded; sites without HTTPS aren't opened;
+  certificate errors are final (localhost is the only exception)
+- **Encrypted DNS** over HTTPS to Cloudflare or Quad9, reached by IP address,
+  with no fallback to your network's DNS
+- **Cookies in memory only**, sent back only to the exact host that set them,
+  gone when you quit (or wipe them any time from the settings bar)
+- Global Privacy Control and Do Not Track on every request, no Referer,
+  a generic user agent
+- Pages can't download files or open other apps
 
-- HTTPS only, everywhere, private windows included
-- encrypted DNS (DNS-over-HTTPS, Quad9) with no plaintext fallback
-- fingerprinting resistance (LibreWolf's resistFingerprinting)
-- strict tracker blocking, plus uBlock Origin (installed by LibreWolf)
-- third-party cookies isolated per site; cross-site referrers trimmed
-- Global Privacy Control and Do Not Track sent
-- WebRTC can't reveal your local or real IP address
-- cookies, cache, history, form data and downloads wiped when you quit;
-  no disk cache
-- notifications, push, MIDI, gamepads, VR and motion sensors off;
-  camera, microphone and location always ask
-- TLS 1.2 or newer, certificate pinning enforced, no telemetry
+## Using it
 
-Firefox's HTTPS-only error page still lets you open a site over HTTP for one
-visit; Lunar can't remove that button without rebuilding LibreWolf.
+- Address bar: type an address, or words to search
+- Click links; ctrl/cmd-click or middle-click opens a new tab
+- Click a form field to type; Enter submits; Tab moves to the next field
+- Shortcuts (cmd on macOS, ctrl elsewhere): T new tab, W close tab,
+  L address bar, R reload, `[` / `]` back / forward, `,` settings
+- Settings bar (`[=]`): search engine (Brave Search, Ecosia, Wikipedia),
+  text size, wipe cookies and the DNS cache
 
-## Search
+Print any page as text: `lunar-browser --dump <address or search>`.
 
-LibreWolf's built-in engines without DuckDuckGo: **Mojeek** (default),
-Startpage and Wikipedia. Change it in Settings (the gear on the toolbar) >
-Search.
+## Building
 
-## How it differs from plain LibreWolf
+On GitHub: Actions > Build Lunar Browser > Run workflow. It runs the tests,
+builds all six versions, and publishes a release with SHA256SUMS:
 
-- `general.config.sandbox_enabled` is off, so `lunar.cfg` can load the theme
-  from inside the app on every start. That file sits in the install folder
-  and could already lock any setting, so this doesn't open anything new.
-- Name, icon and window titles say Lunar Browser. The program file is still
-  `librewolf` / `librewolf.exe`, and the profile folder is LibreWolf's: if
-  LibreWolf is installed too, the two share profiles.
-- The macOS app is re-signed ad hoc (no Apple Developer ID), so it isn't
-  notarized; Windows builds aren't code-signed.
+    macOS    lunar-browser-<v>-macos-arm64.dmg / -x86_64.dmg
+    Windows  lunar-browser-<v>-windows-x86_64-setup.exe / -portable.zip (and arm64)
+    Linux    lunar-browser-<v>-linux-x86_64.deb / .tar.gz (and arm64)
+
+Locally, with Rust installed:
+
+    cargo run --release
+    cargo test
+
+The builds aren't signed by Apple or Microsoft: on macOS run
+`xattr -cr "/Applications/Lunar Browser.app"` the first time; on Windows,
+SmartScreen: More info > Run anyway.
 
 ## Credits
 
-Built on [LibreWolf](https://librewolf.net) (MPL 2.0), itself built on
-Firefox. The VT323 font is under the SIL Open Font License
-(`lunar/branding/VT323-LICENSE.txt`).
+The VT323 font is under the SIL Open Font License (`assets/VT323-LICENSE.txt`).

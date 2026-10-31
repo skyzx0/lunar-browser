@@ -1,72 +1,57 @@
 #!/usr/bin/env bash
-# LibreWolf .tar.xz -> Lunar Browser .tar.xz and .deb.
-# usage: package-linux.sh <librewolf.tar.xz> <x86_64|arm64> <version> <output dir>
+# Builds Lunar Browser for Linux: a .tar.gz and a .deb.
+# usage: package-linux.sh <x86_64|aarch64> <version> <output dir>
 set -euo pipefail
 
-here="$(cd "$(dirname "$0")" && pwd)"
-branding="$here/../lunar/branding"
-tarball="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
-arch="$2"
-version="$3"
-out="$(mkdir -p "$4" && cd "$4" && pwd)"
+root="$(cd "$(dirname "$0")/.." && pwd)"
+arch="$1"
+version="$2"
+out="$(mkdir -p "$3" && cd "$3" && pwd)"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
-tar -xJf "$tarball" -C "$work"
-app="$work/lunar-browser"
-mv "$work/librewolf" "$app"
-python3 "$here/brand.py" "$app"
+cargo build --release --manifest-path "$root/Cargo.toml"
+name="lunar-browser-$version-linux-$([ "$arch" = aarch64 ] && echo arm64 || echo x86_64)"
 
-for size in 16 32 48 64 128; do
-  cp "$branding/default$size.png" "$app/browser/chrome/icons/default/default$size.png"
-done
-cp "$branding/icon.png" "$app/lunar-browser.png"
-cat > "$app/lunar-browser" <<'EOF'
-#!/bin/sh
-exec "$(dirname "$(readlink -f "$0")")/librewolf" "$@"
-EOF
-chmod +x "$app/lunar-browser"
-cat > "$app/lunar-browser.desktop" <<'EOF'
+dir="$work/lunar-browser"
+mkdir -p "$dir"
+cp "$root/target/release/lunar-browser" "$dir/"
+cp "$root/assets/icon.png" "$dir/lunar-browser.png"
+cp "$root/assets/VT323-LICENSE.txt" "$root/README.md" "$dir/"
+cat > "$dir/lunar-browser.desktop" <<'EOF'
 [Desktop Entry]
 Type=Application
 Name=Lunar Browser
 GenericName=Web Browser
-Comment=Private, locked-down web browser, based on LibreWolf
+Comment=Independent web browser with its own engine, an ASCII look and no JavaScript
 Exec=lunar-browser %u
 Icon=lunar-browser
 Terminal=false
 Categories=Network;WebBrowser;
 MimeType=text/html;x-scheme-handler/http;x-scheme-handler/https;
-StartupWMClass=librewolf
+StartupWMClass=lunar-browser
 EOF
+tar -czf "$out/$name.tar.gz" -C "$work" lunar-browser
 
-name="lunar-browser-$version-linux-$arch"
-tar -cJf "$out/$name.tar.xz" -C "$work" lunar-browser
-
-# .deb: installed in /opt/lunar-browser, started with "lunar-browser".
-deb_arch=$([ "$arch" = "x86_64" ] && echo amd64 || echo arm64)
-root="$work/deb"
-mkdir -p "$root/DEBIAN" "$root/opt" "$root/usr/bin" "$root/usr/share/applications"
-cp -a "$app" "$root/opt/lunar-browser"
-ln -s /opt/lunar-browser/lunar-browser "$root/usr/bin/lunar-browser"
-cp "$app/lunar-browser.desktop" "$root/usr/share/applications/"
-for size in 16 32 48 64 128 256; do
-  mkdir -p "$root/usr/share/icons/hicolor/${size}x${size}/apps"
-  cp "$branding/default$size.png" "$root/usr/share/icons/hicolor/${size}x${size}/apps/lunar-browser.png"
-done
-cat > "$root/DEBIAN/control" <<EOF
+deb="$work/deb"
+mkdir -p "$deb/DEBIAN" "$deb/usr/bin" "$deb/usr/share/applications" "$deb/usr/share/icons/hicolor/512x512/apps" "$deb/usr/share/doc/lunar-browser"
+cp "$dir/lunar-browser" "$deb/usr/bin/"
+cp "$dir/lunar-browser.desktop" "$deb/usr/share/applications/"
+cp "$root/assets/icon.png" "$deb/usr/share/icons/hicolor/512x512/apps/lunar-browser.png"
+cp "$root/assets/VT323-LICENSE.txt" "$deb/usr/share/doc/lunar-browser/"
+cat > "$deb/DEBIAN/control" <<EOF
 Package: lunar-browser
-Version: ${version//_/-}
-Architecture: $deb_arch
+Version: $version
+Architecture: $([ "$arch" = aarch64 ] && echo arm64 || echo amd64)
 Maintainer: Lunar <lunar@localhost>
-Depends: libgtk-3-0 | libgtk-3-0t64, libasound2 | libasound2t64, libx11-xcb1, libdbus-1-3
+Depends: libgl1, libxkbcommon0, libc6
+Recommends: libwayland-client0, libx11-6, libxcursor1, libxrandr2, libxi6
 Section: web
 Priority: optional
-Homepage: https://librewolf.net
-Description: Private, locked-down web browser with an ASCII look
- Lunar Browser is LibreWolf with Lunar's protections locked on:
- HTTPS only, encrypted DNS, fingerprint resistance, tracker blocking,
- and everything wiped when you quit.
+Description: Independent web browser with an ASCII look
+ Lunar Browser has its own engine: it is not a fork of any browser. Pages
+ are drawn as text in a terminal font. No JavaScript, HTTPS only, encrypted
+ DNS, no trackers or third-party requests, cookies in memory only.
 EOF
-dpkg-deb --build --root-owner-group "$root" "$out/$name.deb" >/dev/null
-echo "made $out/$name.tar.xz and $out/$name.deb"
+dpkg-deb --build --root-owner-group "$deb" "$out/$name.deb" >/dev/null
+echo "made $out/$name.tar.gz and $out/$name.deb"

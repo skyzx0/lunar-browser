@@ -1,115 +1,94 @@
 name: Build Lunar Browser
 
-# Lunar Browser is LibreWolf with Lunar's protections, search engines and
-# ASCII look added. This takes LibreWolf's official release for each system,
-# checks it against LibreWolf's published checksum, turns it into Lunar
-# Browser and publishes everything as one release. About 10 minutes.
+# Compiles Lunar Browser from this repository's source for macOS (Apple
+# Silicon + Intel), Windows (x64 + arm64) and Linux (x64 + arm64), runs the
+# engine's tests, and publishes everything as one release. About 10 minutes.
 
 on:
   workflow_dispatch:
-    inputs:
-      librewolf_version:
-        description: "LibreWolf version to build from, e.g. 159.0-1 (empty = latest)"
-        required: false
-        default: ""
 
 permissions:
   contents: write
 
 jobs:
-  version:
-    runs-on: ubuntu-latest
-    outputs:
-      librewolf: ${{ steps.v.outputs.librewolf }}
-    steps:
-      - id: v
-        run: |
-          v="${{ github.event.inputs.librewolf_version }}"
-          if [ -z "$v" ]; then
-            v=$(curl -sSf "https://codeberg.org/api/v1/repos/librewolf/bsys6/releases?limit=1" | jq -r '.[0].tag_name')
-          fi
-          echo "LibreWolf $v"
-          echo "librewolf=$v" >> "$GITHUB_OUTPUT"
-
   build:
-    needs: version
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { os: macos-latest, system: macos, arch: arm64, file: macos-arm64-package.dmg }
-          - { os: macos-latest, system: macos, arch: x86_64, file: macos-x86_64-package.dmg }
-          - { os: windows-latest, system: windows, arch: x86_64, file: windows-x86_64-package.zip }
-          - { os: windows-latest, system: windows, arch: arm64, file: windows-arm64-package.zip }
-          - { os: ubuntu-latest, system: linux, arch: x86_64, file: linux-x86_64-package.tar.xz }
-          - { os: ubuntu-latest, system: linux, arch: arm64, file: linux-arm64-package.tar.xz }
+          - { os: macos-latest, system: mac, arch: aarch64 }
+          - { os: macos-latest, system: mac, arch: x86_64 }
+          - { os: windows-latest, system: windows, arch: x86_64 }
+          - { os: windows-latest, system: windows, arch: aarch64 }
+          - { os: ubuntu-latest, system: linux, arch: x86_64 }
+          - { os: ubuntu-24.04-arm, system: linux, arch: aarch64 }
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 40
     defaults:
       run:
         shell: bash
-    env:
-      LW: ${{ needs.version.outputs.librewolf }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download LibreWolf
+      - name: Rust
         run: |
-          name="librewolf-$LW-${{ matrix.file }}"
-          url="https://dl.librewolf.net/librewolf/$LW/$name"
-          mkdir -p in
-          curl -sSfL -o "in/$name" "$url"
-          expected=$(curl -sSfL "$url.sha256sum" | awk '{print $1}')
-          actual=$(python3 -c "import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],'rb').read()).hexdigest())" "in/$name" 2>/dev/null ||
-                   python -c "import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],'rb').read()).hexdigest())" "in/$name")
-          echo "expected $expected"
-          echo "actual   $actual"
-          [ "$expected" = "$actual" ] || { echo "Checksum mismatch: refusing to build."; exit 1; }
-          echo "INPUT=in/$name" >> "$GITHUB_ENV"
+          rustup update stable --no-self-update
+          rustup default stable
+          case "${{ matrix.system }}" in
+            mac) rustup target add ${{ matrix.arch }}-apple-darwin ;;
+            windows) rustup target add ${{ matrix.arch }}-pc-windows-msvc ;;
+          esac
 
-      - name: Build (macOS)
-        if: matrix.system == 'macos'
-        run: |
-          mkdir -p out
-          ./scripts/package-mac.sh "$INPUT" "out/lunar-browser-$LW-macos-${{ matrix.arch }}.dmg"
-
-      - name: Build (Windows)
-        if: matrix.system == 'windows'
-        run: ./scripts/package-windows.sh "$INPUT" "${{ matrix.arch }}" "$LW" out
-
-      - name: Build (Linux)
+      - name: Linux libraries
         if: matrix.system == 'linux'
-        run: ./scripts/package-linux.sh "$INPUT" "${{ matrix.arch }}" "$LW" out
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev \
+            libxrandr-dev libxi-dev libgl1-mesa-dev
 
-      - name: Keep the result
-        uses: actions/upload-artifact@v4
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.system }}-${{ matrix.arch }}
+
+      - name: Test the engine
+        # Tests run where the machine can run what it builds.
+        if: matrix.arch == 'x86_64' && matrix.system != 'mac' || matrix.system == 'mac' && matrix.arch == 'aarch64' || matrix.os == 'ubuntu-24.04-arm'
+        run: cargo test --release
+
+      - name: Version
+        run: echo "VERSION=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)" >> "$GITHUB_ENV"
+
+      - name: Build and package
+        run: ./scripts/package-${{ matrix.system }}.sh ${{ matrix.arch }} "$VERSION" out
+
+      - uses: actions/upload-artifact@v4
         with:
           name: lunar-browser-${{ matrix.system }}-${{ matrix.arch }}
           path: out/*
           if-no-files-found: error
 
   publish:
-    needs: [version, build]
+    needs: build
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: out
           merge-multiple: true
-
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
-          LW: ${{ needs.version.outputs.librewolf }}
         run: |
-          v="$LW-$(date -u +%Y%m%d-%H%M)"
+          version=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+          tag="v$version-$(date -u +%Y%m%d-%H%M)"
           cd out
           sha256sum * > SHA256SUMS
           ls -la
-          gh release create "browser-$v" ./* -R "$GITHUB_REPOSITORY" \
-            --title "Lunar Browser $v (LibreWolf $LW)" \
-            --notes "Lunar Browser, based on LibreWolf $LW.
-          macOS: open the .dmg (arm64 = Apple Silicon, x86_64 = Intel) and drag Lunar Browser to Applications. It is not notarized, so the first time run: xattr -cr '/Applications/Lunar Browser.app'
+          gh release create "$tag" ./* -R "$GITHUB_REPOSITORY" \
+            --title "Lunar Browser $tag" \
+            --notes "Lunar Browser: an independent browser with its own engine (not a fork of anything), an ASCII look and no JavaScript.
+          macOS: open the .dmg (arm64 = Apple Silicon, x86_64 = Intel) and drag Lunar Browser to Applications. It isn't notarized, so the first time run: xattr -cr '/Applications/Lunar Browser.app'
           Windows: run the -setup.exe (SmartScreen: More info > Run anyway), or unzip the -portable.zip.
-          Linux: sudo apt install ./lunar-browser-*.deb, or unpack the .tar.xz and run lunar-browser/lunar-browser.
+          Linux: sudo apt install ./lunar-browser-*.deb, or unpack the .tar.gz and run lunar-browser.
           Check downloads against SHA256SUMS."

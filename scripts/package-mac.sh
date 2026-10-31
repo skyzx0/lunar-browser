@@ -1,36 +1,45 @@
 #!/usr/bin/env bash
-# LibreWolf .dmg -> "Lunar Browser.app" in a new .dmg.
-# usage: package-mac.sh <librewolf.dmg> <output.dmg>
+# Builds "Lunar Browser.app" and a .dmg.
+# usage: package-mac.sh <aarch64|x86_64> <version> <output dir>
 set -euo pipefail
 
-here="$(cd "$(dirname "$0")" && pwd)"
-branding="$here/../lunar/branding"
-dmg="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
-out="$2"
+root="$(cd "$(dirname "$0")/.." && pwd)"
+arch="$1"
+version="$2"
+out="$(mkdir -p "$3" && cd "$3" && pwd)"
+target="$arch-apple-darwin"
 work="$(mktemp -d)"
-trap 'hdiutil detach -quiet "$work/mnt" 2>/dev/null || true; rm -rf "$work"' EXIT
+trap 'rm -rf "$work"' EXIT
 
-hdiutil attach -nobrowse -readonly -mountpoint "$work/mnt" "$dmg" >/dev/null
-mkdir "$work/stage"
-ditto "$work/mnt/LibreWolf.app" "$work/stage/Lunar Browser.app"
-hdiutil detach -quiet "$work/mnt"
+cargo build --release --target "$target" --manifest-path "$root/Cargo.toml"
 
 app="$work/stage/Lunar Browser.app"
-python3 "$here/brand.py" "$app/Contents/Resources"
-
-# Name and icon shown by macOS.
-plist="$app/Contents/Info.plist"
-/usr/libexec/PlistBuddy -c "Set :CFBundleName Lunar Browser" "$plist"
-/usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Lunar Browser" "$plist" 2>/dev/null ||
-  /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string Lunar Browser" "$plist"
-icon="$(/usr/libexec/PlistBuddy -c "Print :CFBundleIconFile" "$plist")"
-cp "$branding/icon.icns" "$app/Contents/Resources/${icon%.icns}.icns"
-
-# Our changes break LibreWolf's signature: sign it again (ad hoc, no Apple ID).
-xattr -cr "$app"
-codesign --force --deep --sign - "$app"
-codesign --verify --deep "$app"
+mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+cp "$root/target/$target/release/lunar-browser" "$app/Contents/MacOS/lunar-browser"
+cp "$root/assets/icon.icns" "$app/Contents/Resources/lunar.icns"
+cat > "$app/Contents/Info.plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key><string>Lunar Browser</string>
+  <key>CFBundleDisplayName</key><string>Lunar Browser</string>
+  <key>CFBundleIdentifier</key><string>os.lunar.browser</string>
+  <key>CFBundleExecutable</key><string>lunar-browser</string>
+  <key>CFBundleIconFile</key><string>lunar</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleShortVersionString</key><string>$version</string>
+  <key>CFBundleVersion</key><string>$version</string>
+  <key>LSMinimumSystemVersion</key><string>11.0</string>
+  <key>NSHighResolutionCapable</key><true/>
+  <key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>
+</dict>
+</plist>
+EOF
+# No Apple Developer ID: sign ad hoc so it runs on Apple Silicon.
+codesign --force --sign - "$app"
 
 ln -s /Applications "$work/stage/Applications"
-hdiutil create -quiet -volname "Lunar Browser" -srcfolder "$work/stage" -format UDZO -ov "$out"
-echo "made $out"
+name="lunar-browser-$version-macos-$([ "$arch" = aarch64 ] && echo arm64 || echo x86_64)"
+hdiutil create -quiet -volname "Lunar Browser" -srcfolder "$work/stage" -format UDZO -ov "$out/$name.dmg"
+echo "made $out/$name.dmg"

@@ -1,0 +1,5 @@
++---------------------------- protection: always on ---------------------------+
+|  [+] https only            [+] encrypted dns        [+] trackers blocked     |
+|  [+] fingerprint resisted  [+] cookies isolated     [+] webrtc ip masked     |
+|  [+] global privacy ctrl   [+] everything wiped when you quit                |
++------------------------------------------------------------------------------+

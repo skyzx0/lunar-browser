@@ -1,0 +1,46 @@
+{
+  "__COMMENT__": "Merged over LibreWolf's distribution/policies.json by scripts/brand.py. Locked policies can't be changed in Settings.",
+  "policies": {
+    "HttpsOnlyMode": "force_enabled",
+    "DNSOverHTTPS": {
+      "Enabled": true,
+      "ProviderURL": "https://dns.quad9.net/dns-query",
+      "Fallback": false,
+      "Locked": true
+    },
+    "EnableTrackingProtection": {
+      "Value": true,
+      "Cryptomining": true,
+      "Fingerprinting": true,
+      "EmailTracking": true,
+      "Locked": true
+    },
+    "Cookies": {
+      "Behavior": "reject-tracker-and-partition-foreign",
+      "BehaviorPrivateBrowsing": "reject-tracker-and-partition-foreign",
+      "Locked": true
+    },
+    "SanitizeOnShutdown": {
+      "Cache": true,
+      "Cookies": true,
+      "History": true,
+      "Sessions": true,
+      "FormData": true,
+      "Downloads": true,
+      "SiteSettings": false,
+      "Locked": true
+    },
+    "DisableFormHistory": true,
+    "DisablePocket": true,
+    "DisableFirefoxAccounts": true,
+    "DisableProfileImport": true,
+    "NetworkPrediction": false,
+    "PostQuantumKeyAgreementEnabled": true,
+    "Permissions": {
+      "Notifications": { "BlockNewRequests": true, "Locked": true },
+      "Autoplay": { "Default": "block-audio-video" },
+      "VirtualReality": { "BlockNewRequests": true, "Locked": true }
+    },
+    "SearchSuggestEnabled": false
+  }
+}

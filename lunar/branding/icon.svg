@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <rect width="1024" height="1024" fill="#05070d"/>
+  <circle cx="512" cy="470" r="250" fill="#e9e4b8"/>
+  <circle cx="610" cy="410" r="230" fill="#05070d"/>
+  <circle cx="390" cy="560" r="34" fill="#cfc99a"/>
+  <circle cx="330" cy="430" r="20" fill="#cfc99a"/>
+  <circle cx="455" cy="660" r="16" fill="#cfc99a"/>
+  <text x="512" y="860" text-anchor="middle" font-family="Menlo, monospace" font-size="96" font-weight="bold" fill="#8fd8ff" letter-spacing="8">&gt;LUNAR_</text>
+  <circle cx="760" cy="230" r="8" fill="#c9d2e3"/>
+  <circle cx="820" cy="560" r="6" fill="#c9d2e3"/>
+  <circle cx="230" cy="250" r="6" fill="#c9d2e3"/>
+</svg>

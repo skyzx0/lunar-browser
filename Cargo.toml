@@ -1,18 +1,31 @@
 [package]
 name = "lunar-browser"
-version = "1.2.0"
+version = "1.3.0"
 edition = "2021"
 description = "An independent web browser with its own engine, an ASCII look and no JavaScript"
 license = "MIT"
 publish = false
 
+[workspace]
+members = [".", "milky-ray"]
+
+[lib]
+name = "lunar_browser"
+path = "src/lib.rs"
+
 [[bin]]
 name = "lunar-browser"
 path = "src/main.rs"
+required-features = ["gui"]
+
+[features]
+default = ["gui"]
+# Lunar's own window. Milky Ray uses the library without it.
+gui = ["dep:eframe"]
 
 [dependencies]
 # Window, input and text drawing. Not a web engine: pages are laid out by src/engine.
-eframe = { version = "0.37", default-features = false, features = ["default_fonts", "glow", "wayland", "x11"] }
+eframe = { version = "0.37", default-features = false, features = ["default_fonts", "glow", "wayland", "x11"], optional = true }
 # TLS for HTTPS and encrypted DNS, with Mozilla's root certificates.
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
 webpki-roots = "1.0"

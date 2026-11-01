@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Milky Ray</title>
+  <link rel="stylesheet" href="app.css">
+  <style id="user-css"></style>
+</head>
+<body>
+  <!-- Line icons, 16px grid, 1.5px stroke. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-back" viewBox="0 0 16 16"><path d="M10 3.5 5.5 8l4.5 4.5"/></symbol>
+      <symbol id="i-forward" viewBox="0 0 16 16"><path d="M6 3.5 10.5 8 6 12.5"/></symbol>
+      <symbol id="i-reload" viewBox="0 0 16 16"><path d="M13 8a5 5 0 1 1-1.6-3.7"/><path d="M13 2.5v3h-3"/></symbol>
+      <symbol id="i-stop" viewBox="0 0 16 16"><path d="m4 4 8 8M12 4l-8 8"/></symbol>
+      <symbol id="i-home" viewBox="0 0 16 16"><path d="M2.5 7.5 8 3l5.5 4.5"/><path d="M4 6.5V13h3v-3.5h2V13h3V6.5"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></symbol>
+      <symbol id="i-close" viewBox="0 0 16 16"><path d="m4.5 4.5 7 7M11.5 4.5l-7 7"/></symbol>
+      <symbol id="i-star" viewBox="0 0 16 16"><path d="m8 2.5 1.7 3.5 3.8.5-2.8 2.6.7 3.8L8 11.1l-3.4 1.8.7-3.8-2.8-2.6 3.8-.5Z"/></symbol>
+      <symbol id="i-sliders" viewBox="0 0 16 16"><path d="M3 4.5h6M12 4.5h1M3 11.5h1M7 11.5h6"/><circle cx="10.5" cy="4.5" r="1.5"/><circle cx="5.5" cy="11.5" r="1.5"/></symbol>
+      <symbol id="i-brush" viewBox="0 0 16 16"><path d="M13.5 2.5 7 9"/><path d="M6.5 9.5c-1.5 0-2.5 1-2.5 2.2 0 .9-.6 1.3-1.5 1.3 1 .8 2.2 1 3.3.6 1.4-.5 2.2-1.6 2.2-2.6Z"/></symbol>
+      <symbol id="i-lock" viewBox="0 0 16 16"><rect x="4" y="7" width="8" height="6" rx="1.5"/><path d="M5.75 7V5.5a2.25 2.25 0 0 1 4.5 0V7"/></symbol>
+      <symbol id="i-warn" viewBox="0 0 16 16"><path d="M8 3 13.5 12.5h-11Z"/><path d="M8 7v2.5M8 11v.01"/></symbol>
+      <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4"/><path d="m10 10 3 3"/></symbol>
+      <symbol id="i-sidebar" viewBox="0 0 16 16"><rect x="2.5" y="3" width="11" height="10" rx="1.5"/><path d="M6 3v10"/></symbol>
+    </defs>
+  </svg>
+
+  <div id="shell">
+    <aside id="sidebar">
+      <div class="side-head drag"><span class="wordmark">Milky Ray</span></div>
+      <div id="side-tabs" class="tab-list vertical"></div>
+      <button class="side-new" data-cmd="newTab"><svg class="i"><use href="#i-plus"/></svg>New tab</button>
+      <div class="side-section">Bookmarks</div>
+      <div id="side-bookmarks" class="side-bookmarks"></div>
+    </aside>
+
+    <div id="main">
+      <header id="topbar">
+        <div id="tabstrip" class="drag">
+          <div id="top-tabs" class="tab-list"></div>
+          <button class="icon-btn" data-cmd="newTab" title="New tab (⌘T)"><svg class="i"><use href="#i-plus"/></svg></button>
+        </div>
+        <div id="toolbar" class="drag">
+          <button class="icon-btn" data-cmd="back" title="Back"><svg class="i"><use href="#i-back"/></svg></button>
+          <button class="icon-btn" data-cmd="forward" title="Forward"><svg class="i"><use href="#i-forward"/></svg></button>
+          <button class="icon-btn" id="reload" data-cmd="reload" title="Reload"><svg class="i"><use href="#i-reload"/></svg></button>
+          <button class="icon-btn opt-home" data-cmd="home" title="Home"><svg class="i"><use href="#i-home"/></svg></button>
+          <form id="address-form" autocomplete="off">
+            <svg class="i lock" id="lock"><use href="#i-search"/></svg>
+            <input id="address" spellcheck="false" placeholder="Search or enter address">
+          </form>
+          <button class="icon-btn" id="star" title="Bookmark this page"><svg class="i"><use href="#i-star"/></svg></button>
+          <button class="icon-btn" data-panel="appearance" title="Appearance"><svg class="i"><use href="#i-brush"/></svg></button>
+          <button class="icon-btn" data-panel="settings" title="Settings"><svg class="i"><use href="#i-sliders"/></svg></button>
+        </div>
+        <div id="bookmarksbar"></div>
+      </header>
+
+      <div id="content"></div>
+
+      <footer id="statusbar">
+        <span id="status-left"></span>
+        <span id="status-right"></span>
+      </footer>
+    </div>
+  </div>
+
+  <div id="panel" hidden>
+    <div class="panel-head">
+      <nav class="panel-tabs">
+        <button data-panel="appearance">Appearance</button>
+        <button data-panel="settings">Settings</button>
+        <button data-panel="bookmarks">Bookmarks</button>
+      </nav>
+      <button class="icon-btn" id="panel-close" title="Close (Esc)"><svg class="i"><use href="#i-close"/></svg></button>
+    </div>
+    <div class="panel-body" id="panel-body"></div>
+  </div>
+
+  <div id="toasts"></div>
+  <script src="app.js"></script>
+</body>
+</html>

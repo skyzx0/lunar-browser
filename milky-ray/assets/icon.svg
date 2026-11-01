@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <rect width="1024" height="1024" fill="#17181b"/>
+  <!-- a milk-white disc, split by a diagonal cut -->
+  <circle cx="472" cy="552" r="286" fill="#efe8da"/>
+  <polygon points="242.0,754.6 483.1,566.2 460.9,537.8 219.8,726.2" fill="#17181b"/>
+  <!-- the ray of light leaving through the cut -->
+  <polygon points="483.1,566.2 924.4,221.4 902.2,193.0 460.9,537.8" fill="#e0a458"/>
+</svg>

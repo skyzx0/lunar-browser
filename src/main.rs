@@ -5,11 +5,9 @@
 
 mod app;
 mod devshot;
-mod engine;
-mod net;
 mod pages;
-mod search;
-mod settings;
+
+use lunar_browser::{engine, net, search, settings};
 
 use std::sync::Arc;
 

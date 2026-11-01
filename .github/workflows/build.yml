@@ -1,8 +1,8 @@
 name: Build Lunar Browser
 
-# Compiles Lunar Browser from this repository's source for macOS (Apple
-# Silicon + Intel), Windows (x64 + arm64) and Linux (x64 + arm64), runs the
-# engine's tests, builds Lunar Search's ready-made index with Lunar's own
+# Compiles Lunar Browser and Lunar Browser Milky Ray from this repository's
+# source for macOS (Apple Silicon + Intel), Windows (x64 + arm64) and Linux
+# (x64 + arm64), runs the engine's tests, builds Lunar Search's ready-made index with Lunar's own
 # crawler, and publishes everything as one release. About 3 hours, nearly
 # all of it the polite crawl (one request per second per site).
 
@@ -46,7 +46,8 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev \
-            libxrandr-dev libxi-dev libgl1-mesa-dev
+            libxrandr-dev libxi-dev libgl1-mesa-dev \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev libxdo-dev
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -125,7 +126,7 @@ jobs:
           ls -la
           gh release create "$tag" ./* -R "$GITHUB_REPOSITORY" \
             --title "Lunar Browser $tag" \
-            --notes "Lunar Browser: an independent browser with its own engine (not a fork of anything), an ASCII look and no JavaScript.
+            --notes "Two browsers. Lunar Browser: an independent browser with its own engine (not a fork of anything), an ASCII look and no JavaScript. Lunar Browser Milky Ray (lunar-browser-milky-ray-*): every website and JavaScript through your system's web engine, with an interface you can restyle completely. Both search with Lunar Search, Lunar's own search engine.
           macOS: open the .dmg (arm64 = Apple Silicon, x86_64 = Intel) and drag Lunar Browser to Applications. It isn't notarized, so the first time run: xattr -cr '/Applications/Lunar Browser.app'
           Windows: run the -setup.exe (SmartScreen: More info > Run anyway), or unzip the -portable.zip.
           Linux: sudo apt install ./lunar-browser-*.deb, or unpack the .tar.gz and run lunar-browser.

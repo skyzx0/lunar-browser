@@ -54,26 +54,4 @@ won't work. That's the trade for the protections below.
 - Settings bar (`[=]`): search engine (Brave Search, Ecosia, Wikipedia),
   text size, wipe cookies and the DNS cache
 
-Print any page as text: `lunar-browser --dump <address or search>`.
-
-## Building
-
-On GitHub: Actions > Build Lunar Browser > Run workflow. It runs the tests,
-builds all six versions, and publishes a release with SHA256SUMS:
-
-    macOS    lunar-browser-<v>-macos-arm64.dmg / -x86_64.dmg
-    Windows  lunar-browser-<v>-windows-x86_64-setup.exe / -portable.zip (and arm64)
-    Linux    lunar-browser-<v>-linux-x86_64.deb / .tar.gz (and arm64)
-
-Locally, with Rust installed:
-
-    cargo run --release
-    cargo test
-
-The builds aren't signed by Apple or Microsoft: on macOS run
-`xattr -cr "/Applications/Lunar Browser.app"` the first time; on Windows,
-SmartScreen: More info > Run anyway.
-
-## Credits
-
-The VT323 font is under the SIL Open Font License (`assets/VT323-LICENSE.txt`).
+Print any page as text: `lunar-browser --dump <address or search

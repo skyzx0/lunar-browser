@@ -226,7 +226,7 @@ fn read_chunked(conn: &mut Conn, mut pending: Vec<u8>, max: usize) -> Result<Vec
     }
 }
 
-fn send(req: &Request, jar: &Mutex<CookieJar>, resolver: &Resolver) -> Result<Response, String> {
+fn send(req: &Request, jar: &Mutex<CookieJar>, resolver: &Resolver, agent: &str) -> Result<Response, String> {
     let url = &req.url;
     let mut conn = open(url, resolver)?;
     let host = match url.port() {
@@ -239,7 +239,7 @@ fn send(req: &Request, jar: &Mutex<CookieJar>, resolver: &Resolver) -> Result<Re
         path.push_str(q);
     }
     let mut head = format!(
-        "{} {path} HTTP/1.1\r\nHost: {host}\r\nUser-Agent: {USER_AGENT}\r\n\
+        "{} {path} HTTP/1.1\r\nHost: {host}\r\nUser-Agent: {agent}\r\n\
          Accept: text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.1\r\n\
          Accept-Language: en-US,en;q=0.8\r\nAccept-Encoding: gzip, deflate\r\n\
          Connection: close\r\nDNT: 1\r\nSec-GPC: 1\r\nUpgrade-Insecure-Requests: 1\r\n",
@@ -272,10 +272,15 @@ fn send(req: &Request, jar: &Mutex<CookieJar>, resolver: &Resolver) -> Result<Re
 }
 
 /// Fetches a page, following redirects (each one upgraded to https).
-pub fn fetch(mut req: Request, jar: &Mutex<CookieJar>, resolver: &Resolver) -> Result<Response, String> {
+pub fn fetch(req: Request, jar: &Mutex<CookieJar>, resolver: &Resolver) -> Result<Response, String> {
+    fetch_as(req, jar, resolver, USER_AGENT)
+}
+
+/// Like `fetch`, with a different user agent (the search crawler's).
+pub fn fetch_as(mut req: Request, jar: &Mutex<CookieJar>, resolver: &Resolver, agent: &str) -> Result<Response, String> {
     req.url = upgrade(req.url);
     for _ in 0..=MAX_REDIRECTS {
-        let response = send(&req, jar, resolver)?;
+        let response = send(&req, jar, resolver, agent)?;
         if matches!(response.status, 301 | 302 | 303 | 307 | 308) {
             let location = response.header("location").ok_or("redirect without a location")?;
             let next = req.url.join(location).map_err(|e| format!("bad redirect: {e}"))?;

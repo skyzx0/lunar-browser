@@ -16,9 +16,11 @@ use crate::engine::layout::{self, Action, Line};
 use crate::net::dns::Resolver;
 use crate::net::http::{self, CookieJar, Request};
 use crate::pages;
-use crate::settings::{Settings, ENGINES, TEXT_SIZES};
+use crate::search::Engine;
+use crate::settings::{self, Settings, TEXT_SIZES};
 
 const NEW_TAB: &str = "lunar:newtab";
+const SEARCH: &str = "lunar:search";
 const MAX_COLS: usize = 110;
 
 pub mod color {
@@ -111,12 +113,15 @@ pub struct LunarApp {
     focus_address: bool,
     settings_open: bool,
     settings: Settings,
+    search: Arc<Engine>,
     net: Arc<Net>,
     tx: Sender<Loaded>,
     rx: Receiver<Loaded>,
     hovered_link: Option<String>,
     notice: Option<(String, Instant)>,
     spinner: usize,
+    /// Whether open Lunar pages have been redrawn since the index loaded.
+    index_ready: bool,
     /// Development screenshot (see devshot.rs): path and frames drawn so far.
     screenshot: Option<(String, u32)>,
 }
@@ -164,15 +169,55 @@ fn load(net: &Net, target: &Target) -> Page {
     }
 }
 
+/// Lunar's own pages: the new tab page and Lunar Search results.
+fn internal_page(search: &Engine, target: &str) -> Option<Page> {
+    if target == NEW_TAB {
+        return Some(page_from_html(NEW_TAB, None, &pages::new_tab(search.pages()), true, false));
+    }
+    let query = target.strip_prefix(SEARCH)?;
+    let q = url::form_urlencoded::parse(query.trim_start_matches('?').as_bytes())
+        .find(|(k, _)| k == "q")
+        .map(|(_, v)| v.into_owned())
+        .unwrap_or_default();
+    let html = pages::search(&q, &search.search(&q));
+    Some(page_from_html(target, None, &html, true, false))
+}
+
+/// What the user typed in the address bar -> where to go.
+fn target_for(input: &str) -> Option<Target> {
+    let text = input.trim();
+    if text.is_empty() {
+        return None;
+    }
+    let lower = text.to_ascii_lowercase();
+    if lower == NEW_TAB || lower.starts_with(SEARCH) {
+        return Some(Target::Get(text.into()));
+    }
+    if lower.starts_with("https://") || lower.starts_with("http://") {
+        return Some(Target::Get(text.into()));
+    }
+    let is_local = lower.starts_with("localhost") || lower.starts_with("127.0.0.1");
+    let looks_like_host = !text.contains(char::is_whitespace)
+        && text.split(['/', '?', '#']).next().map_or(false, |h| h.contains('.') && !h.starts_with('.') && !h.ends_with('.'));
+    if is_local {
+        return Some(Target::Get(format!("http://{text}")));
+    }
+    if looks_like_host {
+        return Some(Target::Get(format!("https://{text}")));
+    }
+    Some(Target::Get(settings::search_url(text)))
+}
+
 /// Fetches `input` (an address or a search) and prints it laid out
 /// `cols` wide: `lunar-browser --dump <address>`.
 pub fn dump(input: &str, cols: usize) -> bool {
-    let app = LunarApp::new();
-    let Some(target) = app.target_for(input) else { return false };
-    let page = if target.url() == NEW_TAB {
-        page_from_html(NEW_TAB, None, &pages::new_tab(&app.settings), true, false)
+    let Some(target) = target_for(input) else { return false };
+    let page = if target.url() == NEW_TAB || target.url().starts_with(SEARCH) {
+        let search = Engine::open_now(settings::index_path());
+        internal_page(&search, target.url()).unwrap()
     } else {
-        load(&app.net, &target)
+        let net = Net { resolver: Resolver::new(), jar: Mutex::new(CookieJar::default()) };
+        load(&net, &target)
     };
     eprintln!("{} | {}", page.url, page.doc.title);
     for line in layout::layout(&page.doc, cols, None) {
@@ -181,9 +226,28 @@ pub fn dump(input: &str, cols: usize) -> bool {
     !page.error
 }
 
+/// Crawls until the index holds `pages` pages (or the crawl is done):
+/// `lunar-browser --crawl <pages>`.
+pub fn crawl(pages: usize) {
+    let search = Engine::open(settings::index_path(), true);
+    let start = Instant::now();
+    loop {
+        std::thread::sleep(Duration::from_secs(5));
+        let n = search.pages();
+        eprintln!("{:>5}s  {n} pages", start.elapsed().as_secs());
+        if n >= pages || (start.elapsed() > Duration::from_secs(20) && !search.crawling()) {
+            break;
+        }
+    }
+    search.set_crawl(false);
+    eprintln!("saved {} pages", search.pages());
+}
+
 impl LunarApp {
     pub fn new() -> Self {
         let (tx, rx) = channel();
+        let settings = Settings::load();
+        let search = Engine::open(settings::index_path(), settings.crawl);
         let mut app = LunarApp {
             tabs: Vec::new(),
             active: 0,
@@ -192,18 +256,20 @@ impl LunarApp {
             address_has_focus: false,
             focus_address: true,
             settings_open: false,
-            settings: Settings::load(),
+            settings,
+            search,
             net: Arc::new(Net { resolver: Resolver::new(), jar: Mutex::new(CookieJar::default()) }),
             tx,
             rx,
             hovered_link: None,
             notice: None,
             spinner: 0,
+            index_ready: false,
             screenshot: std::env::var("LUNAR_SCREENSHOT").ok().map(|p| (p, 0)),
         };
         app.new_tab(None);
         if let Ok(open) = std::env::var("LUNAR_OPEN") {
-            if let Some(target) = app.target_for(&open) {
+            if let Some(target) = target_for(&open) {
                 app.go(0, target, true);
                 app.focus_address = false;
             }
@@ -254,7 +320,7 @@ impl LunarApp {
 
     /// Loads `target` in tab `index`, adding it to history when `push`.
     fn go(&mut self, index: usize, target: Target, push: bool) {
-        let settings_page = pages::new_tab(&self.settings);
+        let internal = internal_page(&self.search, target.url());
         let Some(tab) = self.tabs.get_mut(index) else { return };
         if push {
             tab.history.truncate(if tab.history.is_empty() { 0 } else { tab.pos + 1 });
@@ -262,9 +328,9 @@ impl LunarApp {
             tab.pos = tab.history.len() - 1;
         }
         tab.scroll_to_top = true;
-        if target.url() == NEW_TAB {
+        if let Some(page) = internal {
             tab.loading = None;
-            tab.page = Some(page_from_html(NEW_TAB, None, &settings_page, true, false));
+            tab.page = Some(page);
         } else {
             let load_id = self.next_id;
             self.next_id += 1;
@@ -281,31 +347,6 @@ impl LunarApp {
                 self.address = target.url().to_string();
             }
         }
-    }
-
-    /// What the user typed in the address bar -> where to go.
-    fn target_for(&self, input: &str) -> Option<Target> {
-        let text = input.trim();
-        if text.is_empty() {
-            return None;
-        }
-        if text.eq_ignore_ascii_case(NEW_TAB) {
-            return Some(Target::Get(NEW_TAB.into()));
-        }
-        let lower = text.to_ascii_lowercase();
-        if lower.starts_with("https://") || lower.starts_with("http://") {
-            return Some(Target::Get(text.into()));
-        }
-        let is_local = lower.starts_with("localhost") || lower.starts_with("127.0.0.1");
-        let looks_like_host = !text.contains(char::is_whitespace)
-            && text.split(['/', '?', '#']).next().map_or(false, |h| h.contains('.') && !h.starts_with('.') && !h.ends_with('.'));
-        if is_local {
-            return Some(Target::Get(format!("http://{text}")));
-        }
-        if looks_like_host {
-            return Some(Target::Get(format!("https://{text}")));
-        }
-        Some(Target::Get(self.settings.search_url(text)))
     }
 
     fn back(&mut self) {
@@ -332,6 +373,25 @@ impl LunarApp {
         let i = self.active;
         if let Some(t) = self.tabs[i].history.get(self.tabs[i].pos).cloned() {
             self.go(i, t, false);
+        }
+    }
+
+    /// Pages made before the index finished loading (searches, the new tab
+    /// page's count) are made again once it has.
+    fn refresh_when_index_loads(&mut self, ctx: &egui::Context) {
+        if self.index_ready {
+            return;
+        }
+        if !self.search.loaded() {
+            ctx.request_repaint_after(Duration::from_millis(100));
+            return;
+        }
+        self.index_ready = true;
+        for tab in &mut self.tabs {
+            let Some(target) = tab.history.get(tab.pos) else { continue };
+            if let Some(page) = internal_page(&self.search, target.url()) {
+                tab.page = Some(page);
+            }
         }
     }
 
@@ -445,6 +505,9 @@ impl LunarApp {
             None => Url::parse(action),
         };
         let Ok(mut url) = url else { return self.notice("this form has nowhere to go") };
+        if url.as_str().starts_with(SEARCH) {
+            return self.go(i, Target::Get(format!("{SEARCH}?{encoded}")), true);
+        }
         if !matches!(url.scheme(), "http" | "https") {
             return self.notice("this form doesn't send to a web address");
         }
@@ -628,7 +691,7 @@ impl LunarApp {
             }
             self.address_has_focus = resp.has_focus();
             if resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)) {
-                if let Some(target) = self.target_for(&self.address.clone()) {
+                if let Some(target) = target_for(&self.address.clone()) {
                     let i = self.active;
                     self.go(i, target, true);
                 }
@@ -644,19 +707,31 @@ impl LunarApp {
         ui.horizontal(|ui| {
             ui.label(RichText::new("settings:").color(color::MOON));
             ui.add_space(10.0);
-            ui.label(RichText::new("search").color(color::DIM));
             let mut changed = false;
-            egui::ComboBox::from_id_salt("engine")
-                .selected_text(self.settings.search.name)
-                .show_ui(ui, |ui| {
-                    for engine in ENGINES {
-                        let selected = std::ptr::eq(self.settings.search, engine);
-                        if ui.selectable_label(selected, engine.name).clicked() {
-                            self.settings.search = engine;
-                            changed = true;
-                        }
+            ui.label(RichText::new(format!("lunar search: {} pages", self.search.pages())).color(color::DIM));
+            let can_index = self.tabs[self.active].page.as_ref().and_then(|p| p.base.clone());
+            if ui.add_enabled(can_index.is_some(), egui::Button::new("[ index this site ]").frame(false))
+                .on_hover_text("Crawl the site you're on (up to 300 pages) and add it to Lunar Search")
+                .clicked()
+            {
+                if let Some(url) = can_index {
+                    if self.search.add_site(&url) {
+                        self.settings.crawl = true;
+                        self.search.set_crawl(true);
+                        changed = true;
+                        self.notice(format!("indexing {}", url.host_str().unwrap_or("")));
                     }
-                });
+                }
+            }
+            let crawl_label = if self.settings.crawl { "[ crawling: on ]" } else { "[ crawling: off ]" };
+            if ui.add(egui::Button::new(crawl_label).frame(false))
+                .on_hover_text("Lunar Search grows its index by crawling in the background")
+                .clicked()
+            {
+                self.settings.crawl = !self.settings.crawl;
+                self.search.set_crawl(self.settings.crawl);
+                changed = true;
+            }
             ui.add_space(10.0);
             ui.label(RichText::new("text").color(color::DIM));
             egui::ComboBox::from_id_salt("size")
@@ -671,8 +746,7 @@ impl LunarApp {
                 });
             if changed {
                 self.settings.save();
-                // The new tab page shows the search engine: redraw open ones.
-                let fresh = pages::new_tab(&self.settings);
+                let fresh = pages::new_tab(self.search.pages());
                 for tab in &mut self.tabs {
                     if tab.history.get(tab.pos).map_or(false, |t| t.url() == NEW_TAB) {
                         tab.page = Some(page_from_html(NEW_TAB, None, &fresh, true, false));
@@ -699,7 +773,7 @@ impl LunarApp {
     fn status_bar(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             let small = |t: &str| RichText::new(t).size(15.0).color(color::OK);
-            for item in ["+OWN-ENGINE", "+NO-JAVASCRIPT", "+HTTPS-ONLY", "+DNS:ENCRYPTED", "+NO-TRACKERS", "+NO-3RD-PARTIES", "+COOKIES:RAM-ONLY"] {
+            for item in ["+OWN-ENGINE", "+OWN-SEARCH", "+NO-JAVASCRIPT", "+HTTPS-ONLY", "+DNS:ENCRYPTED", "+NO-TRACKERS", "+NO-3RD-PARTIES", "+COOKIES:RAM-ONLY"] {
                 ui.label(small(item));
             }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -711,6 +785,7 @@ impl LunarApp {
                 let text = text
                     .or_else(|| self.hovered_link.clone())
                     .or_else(|| self.tabs[self.active].loading.map(|_| format!("loading {}", ["|", "/", "-", "\\"][self.spinner % 4])))
+                    .or_else(|| self.search.crawling().then(|| format!("lunar search: indexing, {} pages", self.search.pages())))
                     .unwrap_or_else(|| "ready".into());
                 ui.label(RichText::new(text).size(15.0).color(color::TEXT));
             });
@@ -831,9 +906,14 @@ impl LunarApp {
 }
 
 impl eframe::App for LunarApp {
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        self.search.save();
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = &ui.ctx().clone();
         self.receive();
+        self.refresh_when_index_loads(ctx);
         self.shortcuts(ctx);
         self.type_into_field(ctx);
         let loading = self.tabs.iter().any(|t| t.loading.is_some());
@@ -842,6 +922,8 @@ impl eframe::App for LunarApp {
             ctx.request_repaint_after(Duration::from_millis(120));
         } else if self.notice.as_ref().map_or(false, |(_, at)| at.elapsed() < Duration::from_secs(4)) {
             ctx.request_repaint_after(Duration::from_millis(500));
+        } else if self.search.crawling() {
+            ctx.request_repaint_after(Duration::from_secs(2));
         }
         if let Some((path, frames)) = self.screenshot.as_mut() {
             *frames += 1;

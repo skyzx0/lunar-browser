@@ -8,6 +8,7 @@ mod devshot;
 mod engine;
 mod net;
 mod pages;
+mod search;
 mod settings;
 
 use std::sync::Arc;
@@ -61,6 +62,10 @@ fn main() -> eframe::Result<()> {
     if args.len() >= 3 && args[1] == "--dump" {
         let ok = app::dump(&args[2..].join(" "), 100);
         std::process::exit(if ok { 0 } else { 1 });
+    }
+    if args.len() >= 3 && args[1] == "--crawl" {
+        app::crawl(args[2].parse().unwrap_or(1000));
+        return Ok(());
     }
     let icon = eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon.png")).ok();
     let mut viewport = egui::ViewportBuilder::default()

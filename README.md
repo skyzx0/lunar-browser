@@ -1,15 +1,19 @@
 # Lunar Browser
 
-An independent web browser with its own engine. Not a fork, reskin or
-wrapper of Chromium, Firefox, WebKit or any other browser: Lunar parses
-HTML, lays pages out and talks to the network with its own code, and draws
-every page as text in the VT323 terminal font. For macOS, Windows and Linux.
+An independent web browser with its own engine and its own search engine.
+Not a fork, reskin or wrapper of Chromium, Firefox, WebKit or any other
+browser, and no Google, Bing, Brave or DuckDuckGo behind its search: Lunar
+parses HTML, lays pages out, talks to the network, crawls, indexes and
+ranks with its own code, and draws every page as text in the VT323
+terminal font. For macOS, Windows and Linux.
 
     src/engine/html.rs      HTML parser: forgiving, drops scripts and styles
     src/engine/doc.rs       document model: blocks, links, form fields
     src/engine/layout.rs    lays a page out on a character grid
     src/net/http.rs         HTTP/1.1 client: HTTPS only, memory-only cookies
     src/net/dns.rs          DNS over HTTPS (Cloudflare, Quad9), no plaintext DNS
+    src/search/crawl.rs     Lunar Search's crawler: robots.txt, one request/s per site
+    src/search/index.rs     Lunar Search's index: BM25 ranking, snippets
     src/app.rs              the window: tabs, toolbar, settings bar, page view
     src/pages.rs            Lunar's own pages (new tab, errors)
     scripts/                packaging for each system
@@ -19,11 +23,30 @@ Libraries do the jobs that aren't a browser's: drawing the window and text
 (egui/eframe), TLS encryption (rustls, with Mozilla's root certificates),
 URL parsing, gzip, and reading DNS answers (JSON).
 
+## Lunar Search
+
+Lunar's own search engine. It crawls the web with Lunar's own network
+stack, keeps its index on your computer, and ranks results there, so no
+search company ever sees what you search for.
+
+- It starts from a curated set of sites (Wikipedia's vital articles,
+  Wikinews, AP, BBC, the Guardian, NPR, Ars Technica, The Conversation,
+  NASA, Project Gutenberg, docs for Rust, Python, Go, MDN and Arch Linux)
+  and grows to about 4,000 pages in the background
+- Any site you're on can be added: settings bar > `[ index this site ]`
+- It obeys robots.txt and `<meta name="robots">`, sends at most one request
+  per second to any site, and identifies itself as `LunarSearch/1.0`
+- Your browsing is never indexed unless you choose to index a site
+- Crawling can be switched off in the settings bar; the index is a file
+  in Lunar's data folder (`search-index.gz`)
+
+It knows thousands of pages, not billions: a big web search engine needs
+data centers. What it has, it searches privately and instantly.
+
 ## What it does, and doesn't
 
-Works well on pages that are HTML first: Wikipedia, search results (Brave
-Search, Ecosia), documentation, blogs, news sites, forums, plain-HTML
-forms and logins.
+Works well on pages that are HTML first: Wikipedia, documentation, blogs,
+news sites, forums, plain-HTML forms and logins.
 
 Doesn't run JavaScript, apply CSS or load images, so web apps (YouTube,
 Gmail, maps, chats) and pages that only show content through JavaScript
@@ -51,7 +74,8 @@ won't work. That's the trade for the protections below.
 - Click a form field to type; Enter submits; Tab moves to the next field
 - Shortcuts (cmd on macOS, ctrl elsewhere): T new tab, W close tab,
   L address bar, R reload, `[` / `]` back / forward, `,` settings
-- Settings bar (`[=]`): search engine (Brave Search, Ecosia, Wikipedia),
-  text size, wipe cookies and the DNS cache
+- Settings bar (`[=]`): Lunar Search's page count, index this site,
+  crawling on/off, text size, wipe cookies and the DNS cache
 
-Print any page as text: `lunar-browser --dump <address or search
+Print any page or search as text: `lunar-browser --dump <address or search>`.
+Grow the index without opening a window: `lunar-browser --crawl <pages>`.

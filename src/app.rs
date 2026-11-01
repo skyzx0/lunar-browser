@@ -1,6 +1,3 @@
-//! The browser window: tabs, toolbar, settings bar, status bar and the page,
-//! drawn character by character from Lunar's layout.
-
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -38,7 +35,6 @@ pub mod color {
     pub const FIELD: Color32 = Color32::from_rgb(0x12, 0x1a, 0x2c);
 }
 
-/// Networking state shared with loader threads. Memory only.
 struct Net {
     resolver: Resolver,
     jar: Mutex<CookieJar>,
@@ -120,9 +116,7 @@ pub struct LunarApp {
     hovered_link: Option<String>,
     notice: Option<(String, Instant)>,
     spinner: usize,
-    /// Whether open Lunar pages have been redrawn since the index loaded.
     index_ready: bool,
-    /// Development screenshot (see devshot.rs): path and frames drawn so far.
     screenshot: Option<(String, u32)>,
 }
 
@@ -135,7 +129,6 @@ fn page_from_html(url: &str, base: Option<Url>, source: &str, secure: bool, erro
     Page::new(display_url(url), base, doc, secure, error)
 }
 
-/// Fetches and lays out a page on a loader thread.
 fn load(net: &Net, target: &Target) -> Page {
     let url = match Url::parse(target.url()) {
         Ok(u) if matches!(u.scheme(), "http" | "https") => u,
@@ -169,7 +162,6 @@ fn load(net: &Net, target: &Target) -> Page {
     }
 }
 
-/// Lunar's own pages: the new tab page and Lunar Search results.
 fn internal_page(search: &Engine, target: &str) -> Option<Page> {
     if target == NEW_TAB {
         return Some(page_from_html(NEW_TAB, None, &pages::new_tab(search.pages()), true, false));
@@ -183,7 +175,6 @@ fn internal_page(search: &Engine, target: &str) -> Option<Page> {
     Some(page_from_html(target, None, &html, true, false))
 }
 
-/// What the user typed in the address bar -> where to go.
 fn target_for(input: &str) -> Option<Target> {
     let text = input.trim();
     if text.is_empty() {
@@ -208,8 +199,6 @@ fn target_for(input: &str) -> Option<Target> {
     Some(Target::Get(settings::search_url(text)))
 }
 
-/// Fetches `input` (an address or a search) and prints it laid out
-/// `cols` wide: `lunar-browser --dump <address>`.
 pub fn dump(input: &str, cols: usize) -> bool {
     let Some(target) = target_for(input) else { return false };
     let page = if target.url() == NEW_TAB || target.url().starts_with(SEARCH) {
@@ -226,8 +215,6 @@ pub fn dump(input: &str, cols: usize) -> bool {
     !page.error
 }
 
-/// Crawls until the index holds `pages` pages, `minutes` pass, or the crawl
-/// is done: `lunar-browser --crawl <pages> [minutes]`.
 pub fn crawl(pages: usize, minutes: u64) {
     let search = Engine::open(settings::index_path(), true);
     let start = Instant::now();
@@ -319,7 +306,6 @@ impl LunarApp {
         }
     }
 
-    /// Loads `target` in tab `index`, adding it to history when `push`.
     fn go(&mut self, index: usize, target: Target, push: bool) {
         let internal = internal_page(&self.search, target.url());
         let Some(tab) = self.tabs.get_mut(index) else { return };
@@ -377,8 +363,6 @@ impl LunarApp {
         }
     }
 
-    /// Pages made before the index finished loading (searches, the new tab
-    /// page's count) are made again once it has.
     fn refresh_when_index_loads(&mut self, ctx: &egui::Context) {
         if self.index_ready {
             return;
@@ -551,7 +535,6 @@ impl LunarApp {
         }
     }
 
-    /// Typing into the focused form field on the page.
     fn type_into_field(&mut self, ctx: &egui::Context) {
         if self.address_has_focus {
             return;
@@ -857,7 +840,6 @@ impl LunarApp {
                     if is_hover && run.style != Style::Field {
                         painter.rect_filled(run_rect, 0.0, Color32::from_rgba_unmultiplied(0x8f, 0xd8, 0xff, 0x18));
                     }
-                    // Each character on its own grid cell, so ASCII art lines up exactly.
                     let text_y = rect.top() + (line_h - size) / 2.0;
                     painter.text(Pos2::new(x, text_y), egui::Align2::LEFT_TOP, &run.text, font.clone(), fg);
                     if run.style == Style::Link && is_hover {

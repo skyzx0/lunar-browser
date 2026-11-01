@@ -1,10 +1,3 @@
-//! Lunar Search's index: an inverted index over the pages the crawler has
-//! fetched, ranked with BM25 (the formula classic search engines use),
-//! with extra weight for words in the title and the address.
-//!
-//! Saved as a gzip file of (address, title, text) lines; the word lists are
-//! rebuilt when it loads.
-
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
@@ -13,7 +6,6 @@ use flate2::{read::GzDecoder, write::GzEncoder, Compression};
 
 const HEADER: &str = "LUNAR-INDEX 1";
 const TITLE_WEIGHT: u32 = 4;
-/// Text kept per page, for ranking and snippets.
 pub const MAX_TEXT: usize = 5_000;
 
 const STOP: &[&str] = &[
@@ -21,8 +13,6 @@ const STOP: &[&str] = &[
     "or", "that", "the", "to", "was", "were", "will", "with", "this", "these", "those", "but", "not", "you",
 ];
 
-/// Lowercase words, without stop words; plural "s" dropped so "phases"
-/// finds "phase".
 pub fn words(text: &str) -> Vec<String> {
     text.split(|c: char| !c.is_alphanumeric())
         .filter(|w| !w.is_empty() && w.chars().count() <= 40)
@@ -96,7 +86,6 @@ impl Index {
         self.pages.push(page);
     }
 
-    /// The best `limit` pages for `query`, and how many pages matched at all.
     pub fn search(&self, query: &str, limit: usize) -> (Vec<Hit>, usize) {
         let mut terms = words(query);
         terms.sort();
@@ -125,11 +114,9 @@ impl Index {
             .into_iter()
             .map(|(doc, (score, hits))| {
                 let page = &self.pages[doc as usize];
-                // Pages with every word beat pages with some; words in the address help.
                 let coverage = (hits as f64 / terms.len() as f64).powi(2);
                 let url = page.url.to_lowercase();
                 let in_url = terms.iter().filter(|t| url.contains(t.as_str())).count() as f64;
-                // Shorter addresses tend to be the main page on a subject.
                 let depth = page.url.matches('/').count().saturating_sub(2) as f64;
                 (doc, score * coverage * (1.0 + 0.25 * in_url) / (1.0 + 0.05 * depth))
             })
@@ -177,8 +164,6 @@ impl Index {
     }
 }
 
-/// About 240 characters of `text` around the first query word, with the
-/// query words wrapped in <b>.
 fn snippet(text: &str, terms: &[String]) -> String {
     let lower = text.to_lowercase();
     let at = terms.iter().filter_map(|t| lower.find(t.as_str())).min().unwrap_or(0);

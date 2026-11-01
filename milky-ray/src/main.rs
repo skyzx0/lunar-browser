@@ -1,12 +1,3 @@
-//! Lunar Browser Milky Ray: a full, fully customizable browser.
-//!
-//! Pages are rendered by the web engine built into the operating system
-//! (WebKit on macOS, WebView2 on Windows, WebKitGTK on Linux), so every site
-//! and all JavaScript works. Everything around the page is Milky Ray's own:
-//! the interface (ui/, plain HTML/CSS/JS so every part of it can be
-//! restyled), tabs, menus, settings, and Lunar Search, Lunar's own search
-//! engine, which answers milky:search pages from an index on this computer.
-
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
 mod pages;
@@ -27,7 +18,6 @@ use wry::{NewWindowResponse, PageLoadEvent, Rect, WebContext, WebView, WebViewBu
 
 use store::Store;
 
-/// Events from webviews, menus and handlers, handled on the main thread.
 enum UserEvent {
     Ipc(String),
     Title(u64, String),
@@ -63,8 +53,6 @@ struct App {
     proxy: EventLoopProxy<UserEvent>,
 }
 
-/// Address of one of Milky Ray's own pages. Windows serves custom
-/// protocols from http://<name>.localhost.
 fn internal(path: &str) -> String {
     if cfg!(windows) { format!("http://milky.localhost/{path}") } else { format!("milky://localhost/{path}") }
 }
@@ -104,7 +92,6 @@ const UI_CSS: &str = include_str!("../ui/app.css");
 const UI_JS: &str = include_str!("../ui/app.js");
 const VT323: &[u8] = include_bytes!("../../assets/VT323-Regular.ttf");
 
-/// An interface file: your edited copy if there is one, else the built-in one.
 fn ui_file(name: &str) -> Option<Vec<u8>> {
     if let Some(dir) = store::ui_dir() {
         if let Ok(bytes) = std::fs::read(dir.join(name)) {
@@ -120,8 +107,6 @@ fn ui_file(name: &str) -> Option<Vec<u8>> {
     }
 }
 
-/// Runs at the start of every page: your CSS for every website, page
-/// transparency, and your JavaScript for every website.
 fn page_script(store: &Store) -> String {
     let css = store.get_str("siteCss");
     let js = store.get_str("siteJs");
@@ -146,13 +131,11 @@ try {{ {js} }} catch (e) {{ console.error('Milky Ray site script:', e); }}"#,
     )
 }
 
-/// Opens a folder in Finder, Explorer or the Linux file manager.
 fn reveal(path: &std::path::Path) {
     let program = if cfg!(target_os = "macos") { "open" } else if cfg!(windows) { "explorer" } else { "xdg-open" };
     let _ = std::process::Command::new(program).arg(path).spawn();
 }
 
-/// Puts a webview inside the window (in a GTK container on Linux).
 #[cfg(not(target_os = "linux"))]
 fn build_child(builder: WebViewBuilder, window: &Window) -> wry::Result<WebView> {
     builder.build_as_child(window)
@@ -253,7 +236,6 @@ impl App {
                 let _ = p2.send_event(UserEvent::Loading(id, matches!(event, PageLoadEvent::Started), url));
             })
             .with_navigation_handler(move |url| {
-                // HTTPS-only: send http:// pages to their https:// address instead.
                 if https_only && url.starts_with("http://") && !is_internal(&url) {
                     let host = url.trim_start_matches("http://").split(['/', ':', '?']).next().unwrap_or("");
                     if host != "localhost" && host != "127.0.0.1" && !host.ends_with(".localhost") {
@@ -475,7 +457,6 @@ impl App {
                 if let Some(settings) = msg.get("settings") {
                     self.store.replace(settings.clone());
                     self.search.set_crawl(self.store.get_bool("crawl", true));
-                    // Website CSS and page transparency apply to open pages right away.
                     let call = format!(
                         "window.__milkyApply && window.__milkyApply({}, {})",
                         json!(self.store.get_str("siteCss")),
@@ -501,7 +482,6 @@ impl App {
             },
             "uiReset" => {
                 if let Some(dir) = store::ui_dir().filter(|d| d.exists()) {
-                    // Kept, not deleted: your edits move to ui-backup.
                     let backup = dir.with_file_name("ui-backup");
                     let _ = std::fs::remove_dir_all(&backup);
                     let _ = std::fs::rename(&dir, &backup);
@@ -569,7 +549,6 @@ impl App {
                     let _ = self.ui.evaluate_script("window.milky && milky.toggleSidebar()");
                 }
                 "print" => self.handle_ipc(r#"{"cmd":"print"}"#),
-                // MILKY_SELFTEST=1 (for development): open pages, then report what loaded.
                 "selftest-open" => {
                     self.new_tab(Some("https://example.com/".into()));
                     self.new_tab(Some(internal("search?q=moon")));
@@ -664,7 +643,6 @@ fn main() -> wry::Result<()> {
 
     let mut builder = WindowBuilder::new()
         .with_title("Lunar Browser Milky Ray")
-        // See-through when the appearance editor lowers the window opacity.
         .with_transparent(true)
         .with_inner_size(tao::dpi::LogicalSize::new(1320.0, 860.0))
         .with_min_inner_size(tao::dpi::LogicalSize::new(640.0, 420.0));
@@ -683,7 +661,6 @@ fn main() -> wry::Result<()> {
         use tao::platform::windows::WindowExtWindows;
         unsafe {
             let _ = menu.init_for_hwnd(window.hwnd() as _);
-            // Shortcuts keep working; the custom interface replaces the menu bar.
             let _ = menu.hide_for_hwnd(window.hwnd() as _);
         }
     }
@@ -730,7 +707,6 @@ fn main() -> wry::Result<()> {
                 Some("svg") => "image/svg+xml",
                 _ => "application/octet-stream",
             };
-            // Only plain file names: nothing outside the interface folder.
             if name.contains("..") || name.contains('/') || name.contains('\\') {
                 return not_found();
             }
@@ -786,7 +762,6 @@ fn main() -> wry::Result<()> {
                 *control_flow = ControlFlow::Exit;
             }
             Event::NewEvents(tao::event::StartCause::ResumeTimeReached { .. }) => {
-                // Keep Lunar Search's page count fresh while it crawls.
                 let pages = app.search.pages();
                 if pages != last_pages {
                     last_pages = pages;

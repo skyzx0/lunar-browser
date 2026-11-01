@@ -1,8 +1,3 @@
-//! Lunar Search: Lunar's own search engine. It crawls the web with Lunar's
-//! own network stack, keeps its index on your computer, and answers
-//! searches there, so no search company ever sees what you look for.
-//! Your browsing is never indexed unless you choose "index this site".
-
 pub mod crawl;
 pub mod index;
 
@@ -18,10 +13,7 @@ use crawl::{Crawler, Frontier, Step, SEEDS};
 use index::{Hit, Index};
 
 const WORKERS: usize = 12;
-/// Lunar Search's ready-made index, built by this project's release
-/// workflow with Lunar's own crawler and published with each release.
 const STARTER_INDEX: &str = "https://github.com/skyzx0/lunar-browser/releases/latest/download/lunar-search-index.gz";
-/// Below this many pages, the ready-made index is fetched to start from.
 const STARTER_BELOW: usize = 2000;
 const SAVE_EVERY: usize = 50;
 
@@ -56,8 +48,6 @@ impl Engine {
         }
     }
 
-    /// Opens the index (in the background) and starts the crawler workers;
-    /// they only crawl while crawling is switched on.
     pub fn open(path: Option<PathBuf>, crawl: bool) -> Arc<Engine> {
         let engine = Arc::new(Engine::new(path, crawl));
         let e = engine.clone();
@@ -71,7 +61,6 @@ impl Engine {
         engine
     }
 
-    /// Opens the index right away, without crawling (for `--dump`).
     pub fn open_now(path: Option<PathBuf>) -> Arc<Engine> {
         let engine = Arc::new(Engine::new(path, false));
         engine.load();
@@ -85,8 +74,6 @@ impl Engine {
                 self.fetch_starter(path);
             }
         }
-        // Start (or continue) the crawl from the seed sites, minus what is
-        // already indexed from each.
         let index = self.index.read().unwrap();
         let mut per_host: HashMap<String, usize> = HashMap::new();
         let mut frontier = self.frontier.lock().unwrap();
@@ -108,7 +95,6 @@ impl Engine {
         self.loaded.store(true, Ordering::SeqCst);
     }
 
-    /// Downloads the ready-made index and adds the pages crawled here so far.
     fn fetch_starter(&self, path: &std::path::Path) {
         let Ok(url) = Url::parse(STARTER_INDEX) else { return };
         let net = (crate::net::dns::Resolver::new(), Mutex::new(crate::net::http::CookieJar::default()));
@@ -196,7 +182,6 @@ impl Engine {
         }
     }
 
-    /// Adds the site of `url` to the crawl (the "index this site" button).
     pub fn add_site(&self, url: &Url) -> bool {
         let Some(host) = url.host_str() else { return false };
         if !matches!(url.scheme(), "https" | "http") {

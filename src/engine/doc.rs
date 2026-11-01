@@ -1,7 +1,3 @@
-//! From element tree to Lunar's document model: a list of blocks (headings,
-//! paragraphs, lists, tables...) made of words, links and form fields. This
-//! is built once per page; laying it out for a window width is layout.rs.
-
 use super::html::{Element, Node};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -19,7 +15,6 @@ pub enum Style {
 
 #[derive(Debug, Clone)]
 pub enum Inline {
-    /// A run of text; whitespace in it is collapsed when laid out.
     Text { text: String, style: Style, link: Option<String> },
     /// A form control, by index into `Doc::fields`.
     Field(usize),
@@ -30,14 +25,11 @@ pub enum Inline {
 pub enum Block {
     /// A paragraph (<p>): blank lines around it.
     Para(Vec<Inline>),
-    /// Text in any other box (<div>...): no blank lines around it.
     Lines(Vec<Inline>),
     Heading(u8, Vec<Inline>),
     /// Preformatted: whitespace and line breaks kept.
     Pre(Vec<Inline>),
     Rule,
-    /// A blank line, around boxes that group several blocks (one search
-    /// result, one card...). Repeated gaps collapse into one.
     Gap,
     List { ordered: bool, items: Vec<Vec<Block>> },
     Quote(Vec<Block>),
@@ -102,9 +94,6 @@ const BLOCKS: &[&str] = &[
 /// Things that are never shown.
 const HIDDEN: &[&str] = &["head", "title", "meta", "link", "base", "datalist", "map", "area", "audio", "video", "canvas"];
 
-/// Class names that, by near-universal convention, mean "not shown until
-/// clicked" or "for screen readers only". Lunar doesn't apply CSS, so it
-/// recognises these instead.
 const HIDDEN_CLASSES: &[&str] = &[
     "sr-only", "visually-hidden", "visuallyhidden", "screen-reader-text", "screenreader", "hidden",
     "dropdown-content", "dropdown-menu", "vector-dropdown-content", "mw-jump-link", "navbox",
@@ -120,7 +109,6 @@ fn is_hidden(el: &Element) -> bool {
             return true;
         }
     }
-    // Language switchers: dozens of links to the same page in other languages.
     if el.tag == "a" && el.attr("hreflang").is_some() && el.attr("lang").is_some() {
         return true;
     }
@@ -134,8 +122,6 @@ fn is_hidden(el: &Element) -> bool {
 }
 
 impl Builder {
-    /// Walks children, returning blocks; inline content collects in `inline`
-    /// and is flushed into a paragraph whenever a block starts.
     fn blocks(&mut self, el: &Element, ctx: &Ctx) -> Vec<Block> {
         let mut out = Vec::new();
         let mut inline = Vec::new();
@@ -177,8 +163,6 @@ impl Builder {
                 let c = Ctx { link: href.map(String::from).or(ctx.link.clone()), ..ctx.clone() };
                 let (before, blocks_before) = (inline.len(), out.len());
                 self.walk(el, &c, out, inline);
-                // A link with no visible text (an image link, say) still needs something to click.
-                // Blocks inside the link may have flushed its text into paragraphs already.
                 let has_text = out.len() > blocks_before
                     || inline.get(before..).map_or(false, |new| {
                         new.iter().any(|i| matches!(i, Inline::Text { text, .. } if !text.trim().is_empty()))
@@ -321,7 +305,6 @@ impl Builder {
                 }
             }
             "li" | "tr" | "td" | "th" | "tbody" | "thead" | "tfoot" => {
-                // Outside their proper parents: treat as plain blocks.
                 flush(out, inline);
                 self.walk(el, ctx, out, inline);
                 flush(out, inline);
@@ -368,7 +351,6 @@ impl Builder {
         let width = el.attr("size").and_then(|s| s.parse().ok()).unwrap_or(30).clamp(4, 60);
         let checked = el.attr("checked").is_some();
         let value = if matches!(kind, FieldKind::Checkbox | FieldKind::Radio) && value.is_empty() { "on".into() } else { value };
-        // Unnamed checkboxes and radios are menu toggles drawn by CSS, not form fields.
         let hidden = kind == FieldKind::Hidden
             || (matches!(kind, FieldKind::Checkbox | FieldKind::Radio) && name.is_empty());
         let i = self.field(Field { kind, name, value, checked, form: ctx.form, width, label });
@@ -398,7 +380,6 @@ impl Builder {
                             let mut content = Vec::new();
                             let mut nested = Vec::new();
                             self.walk(td, &c, &mut nested, &mut content);
-                            // Blocks inside a cell are flattened to text in the row.
                             for block in nested {
                                 flatten(block, &mut content);
                             }
@@ -489,7 +470,6 @@ pub fn build(root: &Element) -> Doc {
     let mut b = Builder { doc: Doc::default() };
     b.doc.title = root.find("title").map(|t| t.text()).unwrap_or_default();
     b.doc.base = root.find("base").and_then(|e| e.attr("href")).map(String::from);
-    // When a page marks its main content, show that and skip the menus around it.
     let body = root
         .find("main")
         .filter(|m| m.text().len() > 200)

@@ -1,10 +1,3 @@
-//! Lunar Search's crawler. It reads pages with Lunar's own network stack
-//! and engine, follows their links, and adds them to the index.
-//!
-//! Polite by design: it obeys robots.txt and <meta name="robots">, sends
-//! at most one request per second to any site, caps how much of a site it
-//! takes, and says who it is in its user agent.
-
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -19,11 +12,8 @@ use super::index::{Page, MAX_TEXT};
 
 pub const CRAWLER_AGENT: &str = "LunarSearch";
 const PER_SITE_DELAY: Duration = Duration::from_millis(1100);
-/// Sites found through links get this many pages each, up to this many sites.
 const DISCOVER_PAGES: usize = 12;
 const DISCOVER_SITES: usize = 2000;
-/// Never crawled: social networks, app stores, link shorteners, login walls
-/// and file hosts (they need JavaScript or an account, or aren't pages).
 const NEVER: &[&str] = &[
     "facebook.com", "fb.com", "twitter.com", "x.com", "t.co", "instagram.com", "threads.net", "tiktok.com",
     "youtube.com", "youtu.be", "linkedin.com", "pinterest.com", "reddit.com", "redd.it", "snapchat.com",
@@ -34,11 +24,7 @@ const NEVER: &[&str] = &[
     "bsky.app", "mastodon.social", "flickr.com", "vimeo.com", "spotify.com", "soundcloud.com", "twitch.tv",
 ];
 
-/// Where the crawl starts: (address, pages to take from that site, link
-/// depth). Sites linked from these are discovered too (see DISCOVER_*).
-/// Sites whose robots.txt forbids crawling are skipped automatically.
 pub const SEEDS: &[(&str, usize, u8)] = &[
-    // Reference: Wikipedia's 10,000 level-4 vital articles, by topic
     ("https://en.wikipedia.org/wiki/Wikipedia:Vital_articles/Level/4/People", 700, 1),
     ("https://en.wikipedia.org/wiki/Wikipedia:Vital_articles/Level/4/History", 500, 1),
     ("https://en.wikipedia.org/wiki/Wikipedia:Vital_articles/Level/4/Geography", 600, 1),
@@ -201,7 +187,6 @@ impl Robots {
                 _ => {}
             }
         }
-        // A group naming LunarSearch replaces the "*" rules.
         if !ours.disallow.is_empty() || !ours.allow.is_empty() { ours } else { rules }
     }
 
@@ -284,7 +269,6 @@ impl Frontier {
         if never(&host) {
             return;
         }
-        // A new site, linked from near the top of a known one: take a few pages.
         if !self.sites.contains_key(&host) {
             if depth > 2 || self.discovered >= DISCOVER_SITES {
                 return;
@@ -309,7 +293,6 @@ impl Frontier {
         site.queue.push_back((url, depth));
     }
 
-    /// The next address whose site may be visited now.
     fn pop(&mut self) -> Option<(String, String, u8)> {
         let now = Instant::now();
         let host = self
@@ -348,7 +331,6 @@ fn links(el: &Element, out: &mut Vec<String>) {
     for child in &el.children {
         if let Node::Element(e) = child {
             if e.tag == "a" {
-                // rel=nofollow, and links to the same page in other languages, aren't followed.
                 let nofollow = e.attr("rel").map_or(false, |r| r.contains("nofollow")) || e.attr("hreflang").is_some();
                 if let (Some(href), false) = (e.attr("href"), nofollow) {
                     out.push(href.trim().to_string());
@@ -381,8 +363,6 @@ fn meta_robots(root: &Element) -> (bool, bool) {
     (noindex, nofollow)
 }
 
-/// Drops the parts of a page that repeat on every page of a site (menus,
-/// headers, footers, sidebars, forms), so they don't drown out its content.
 fn prune(el: &mut Element) {
     el.children.retain(|child| match child {
         Node::Element(e) => {
@@ -399,7 +379,6 @@ fn prune(el: &mut Element) {
     }
 }
 
-/// The readable text of a page, in reading order.
 fn page_text(d: &doc::Doc) -> String {
     fn inlines(list: &[doc::Inline], out: &mut String) {
         for i in list {

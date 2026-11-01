@@ -1,13 +1,9 @@
-//! The few things you can change, saved as a small text file next to Lunar
-//! Search's index. Nothing about your browsing is ever written there.
-
 use std::path::PathBuf;
 
 pub const TEXT_SIZES: &[f32] = &[16.0, 20.0, 24.0, 28.0];
 
 pub struct Settings {
     pub text_size: f32,
-    /// Whether Lunar Search keeps crawling to grow its index.
     pub crawl: bool,
 }
 

@@ -1,4 +1,3 @@
-// Gives the Windows program Lunar's icon and name.
 fn main() {
     #[cfg(windows)]
     {

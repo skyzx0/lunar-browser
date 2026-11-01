@@ -1,8 +1,3 @@
-//! DNS over HTTPS. Lunar never asks your network's DNS server anything: names
-//! are looked up over an encrypted connection to Cloudflare (1.1.1.1) or
-//! Quad9 (9.9.9.9), reached by IP address so the lookup itself needs no DNS.
-//! There is no plaintext fallback. Answers are kept in memory only.
-
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::Mutex;
@@ -92,7 +87,6 @@ fn lookup(ip: &str, port: u16, name: &str, path: &str, host: &str) -> Result<(Ve
     let ip: IpAddr = ip.parse().unwrap();
     let mut conn = connect_tls(&[ip], port, name)?;
     let (mut ips, ttl4) = query(&mut conn, name, path, host, "A")?;
-    // IPv6 too, but after IPv4: most networks reach IPv4 more reliably.
     if let Ok((v6, _)) = query(&mut conn, name, path, host, "AAAA") {
         ips.extend(v6);
     }

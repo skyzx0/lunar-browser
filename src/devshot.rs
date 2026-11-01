@@ -1,7 +1,3 @@
-//! For development: `LUNAR_SCREENSHOT=out.png` makes Lunar save a picture of
-//! its own window once the page has loaded, then quit. `LUNAR_OPEN=<address>`
-//! opens an address first; `LUNAR_SETTINGS=1` opens the settings bar.
-
 use std::io::Write;
 
 use eframe::egui::ColorImage;

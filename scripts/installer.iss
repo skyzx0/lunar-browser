@@ -1,7 +1,3 @@
-; Installer for Windows (Inno Setup 6), used for both browsers.
-; Built by scripts/package-windows.sh, which passes AppName, AppExe, AppGuid,
-; AppComments, SourceDir, AppVersion, Arch, OutputDir and OutputName.
-
 [Setup]
 AppId={{{#AppGuid}}
 AppName={#AppName}

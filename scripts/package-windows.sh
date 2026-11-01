@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
-# Builds Lunar Browser and Lunar Browser Milky Ray for Windows: a portable
-# .zip and an installer .exe for each. Runs in Git Bash on GitHub's Windows
-# machines.
-# usage: package-windows.sh <x86_64|aarch64> <version> <output dir>
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -20,7 +16,6 @@ iscc="/c/Program Files (x86)/Inno Setup 6/ISCC.exe"
 if [ ! -f "$iscc" ]; then choco install innosetup -y --no-progress >/dev/null; fi
 inno_arch=$([ "$arch" = "x86_64" ] && echo x64compatible || echo arm64)
 
-# package <binary> <app name> <icon.ico> <guid> <comments> <file name>
 package() {
   local bin="$1" name="$2" icon="$3" guid="$4" comments="$5" file="$6-$version-windows-$label"
   local dir="$work/$bin"
@@ -29,7 +24,6 @@ package() {
   cp "$icon" "$dir/app.ico"
   cp "$root/assets/VT323-LICENSE.txt" "$root/README.md" "$dir/"
   (cd "$work" && 7z a -tzip -bso0 "$out/$file-portable.zip" "$bin")
-  # Git Bash would turn the /D... switches into file paths; pass them as written.
   MSYS2_ARG_CONV_EXCL='*' "$iscc" /Q \
     "/DAppName=$name" \
     "/DAppExe=$bin.exe" \

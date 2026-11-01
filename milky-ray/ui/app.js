@@ -1,7 +1,3 @@
-// Milky Ray's interface: tabs, toolbar, bookmarks, and the appearance and
-// settings panels. Talks to the Rust side with window.ipc.postMessage and
-// receives state through window.milky.update().
-
 (() => {
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -108,7 +104,6 @@
     requestAnimationFrame(reportLayout);
   }
 
-  // ---------- page area: tell the app where pages go ----------
   let lastRect = '';
   function reportLayout() {
     const r = $('#content').getBoundingClientRect();
@@ -218,7 +213,6 @@
     renderChrome();
   });
 
-  // Dragging empty parts of the bars moves the window; double-click zooms it.
   document.addEventListener('mousedown', (e) => {
     if (e.button === 0 && e.target.classList.contains('drag')) send('drag');
   });

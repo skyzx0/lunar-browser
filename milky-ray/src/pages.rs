@@ -1,6 +1,3 @@
-//! Milky Ray's own pages: the new tab page and Lunar Search results, both
-//! drawn in the current theme.
-
 use lunar_browser::search::Results;
 use serde_json::Value;
 
@@ -10,7 +7,6 @@ fn escape(s: &str) -> String {
     s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
 
-/// A theme value safe to put in CSS: no quotes, braces or semicolons.
 fn css_value(v: Option<&Value>, default: &str) -> String {
     let owned = match v {
         Some(Value::Number(n)) => n.to_string(),
@@ -22,7 +18,6 @@ fn css_value(v: Option<&Value>, default: &str) -> String {
     if clean.trim().is_empty() { default.to_string() } else { clean }
 }
 
-/// The theme as CSS variables, plus the background and font.
 fn theme_css(settings: &Value) -> String {
     let t = settings.get("theme").cloned().unwrap_or(Value::Null);
     let get = |k: &str, d: &str| css_value(t.get(k), d);

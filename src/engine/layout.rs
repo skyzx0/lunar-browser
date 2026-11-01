@@ -1,8 +1,3 @@
-//! Lays a document out on a character grid `cols` wide: word wrapping,
-//! indentation for lists and quotes, ASCII underlines for headings, tables
-//! as rows. The result is a list of lines made of styled runs, which the UI
-//! draws as-is.
-
 use super::doc::{Block, Doc, Field, FieldKind, Inline, Style};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -56,7 +51,6 @@ pub fn field_text(field: &Field, focused: bool) -> String {
             if focused {
                 chars.push('_');
             }
-            // Show the end of the text when it is longer than the box.
             let start = chars.len().saturating_sub(w);
             let mut visible: String = chars[start..].iter().collect();
             if visible.is_empty() && !focused && !field.label.is_empty() {
@@ -103,7 +97,6 @@ impl<'a> Writer<'a> {
         self.lines.push(merge(line));
     }
 
-    /// Breaks inline content into words, fields and breaks.
     fn atoms(&self, inlines: &[Inline]) -> Vec<Option<Atom>> {
         let mut atoms = Vec::new();
         let mut space = false;
@@ -142,8 +135,6 @@ impl<'a> Writer<'a> {
         atoms
     }
 
-    /// Word-wraps inline content. `first` prefixes the first line, `rest`
-    /// the following ones (for bullets and quote bars).
     fn wrap(&mut self, inlines: &[Inline], first: &[Run], rest: &[Run], style_override: Option<Style>) {
         let indent: usize = rest.iter().map(|r| r.text.chars().count()).sum();
         let avail = self.cols.saturating_sub(indent).max(10);
@@ -169,7 +160,6 @@ impl<'a> Writer<'a> {
                 self.push_line(std::mem::replace(&mut line, Line { runs: rest.to_vec() }));
                 col = 0;
             } else if gap == 1 {
-                // The space takes the link's style only when both sides are the same link.
                 let prev = line.runs.last().map(|r| r.action.clone()).flatten();
                 let same = prev.is_some() && prev == atom.action;
                 line.runs.push(Run { text: " ".into(), style: if same { atom.style } else { Style::Text }, action: if same { atom.action.clone() } else { None } });
@@ -265,7 +255,6 @@ impl<'a> Writer<'a> {
                     for (i, b) in item.iter().enumerate() {
                         let f = if i == 0 { item_first.clone() } else { item_rest.clone() };
                         self.block(b, &f, &item_rest);
-                        // Items stay together: drop the blank line paragraphs leave.
                         if self.lines.last().map_or(false, |l| l.runs.is_empty()) {
                             self.lines.pop();
                         }
@@ -300,7 +289,6 @@ impl<'a> Writer<'a> {
     }
 }
 
-/// Joins neighbouring runs that look and act the same.
 fn merge(line: Line) -> Line {
     let mut runs: Vec<Run> = Vec::with_capacity(line.runs.len());
     for run in line.runs {
@@ -315,8 +303,6 @@ fn merge(line: Line) -> Line {
     Line { runs }
 }
 
-/// Lays out `doc` for a window `cols` characters wide. `focus` is the form
-/// field being typed into, drawn with a cursor.
 pub fn layout(doc: &Doc, cols: usize, focus: Option<usize>) -> Vec<Line> {
     let mut w = Writer { doc, focus, cols: cols.max(20), lines: Vec::new() };
     for block in &doc.blocks {

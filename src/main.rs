@@ -1,6 +1,3 @@
-//! Lunar Browser: an independent web browser. Its engine (src/engine) and
-//! networking (src/net) are its own; it is not a fork of any browser.
-
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
 mod app;
@@ -18,7 +15,6 @@ use app::color;
 fn setup_style(ctx: &egui::Context) {
     let mut fonts = FontDefinitions::default();
     fonts.font_data.insert("vt323".into(), Arc::new(FontData::from_static(include_bytes!("../assets/VT323-Regular.ttf"))));
-    // VT323 first; egui's built-in fonts after it for characters VT323 lacks.
     for family in [FontFamily::Monospace, FontFamily::Proportional] {
         fonts.families.entry(family).or_default().insert(0, "vt323".into());
     }

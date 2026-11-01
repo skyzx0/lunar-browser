@@ -1,10 +1,3 @@
-//! Lunar's HTML parser: text in, element tree out.
-//!
-//! It is forgiving the way browsers have to be: unclosed tags, stray end
-//! tags and implied endings (a new <p> closes the previous one, a new <li>
-//! closes the previous item...) all produce a sensible tree. <script> and
-//! <style> contents are dropped on the spot: Lunar never runs or applies them.
-
 use super::entities::decode;
 
 #[derive(Debug, Clone)]
@@ -29,14 +22,12 @@ impl Element {
         self.attrs.iter().find(|(k, _)| k == name).map(|(_, v)| v.as_str())
     }
 
-    /// All the text inside this element, whitespace collapsed.
     pub fn text(&self) -> String {
         let mut out = String::new();
         collect_text(self, &mut out);
         out.split_whitespace().collect::<Vec<_>>().join(" ")
     }
 
-    /// The first descendant with this tag, depth first.
     pub fn find(&self, tag: &str) -> Option<&Element> {
         for child in &self.children {
             if let Node::Element(el) = child {
@@ -68,9 +59,7 @@ const VOID: &[&str] = &[
     "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source",
     "track", "wbr", "keygen",
 ];
-/// Elements whose contents are skipped entirely.
 const SKIPPED: &[&str] = &["script", "style", "noscript", "template", "svg", "math", "iframe", "object"];
-/// Elements whose contents are raw text (no tags inside).
 const RAW_TEXT: &[&str] = &["title", "textarea", "xmp"];
 /// Opening one of these closes an open <p>.
 const CLOSES_P: &[&str] = &[
@@ -86,7 +75,6 @@ enum Token {
     Text(String),
 }
 
-/// Case-insensitive search for an ASCII `needle`, without copying.
 fn find_ci(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     let first = needle.first()?.to_ascii_lowercase();
     let last_start = haystack.len().checked_sub(needle.len())?;
@@ -110,8 +98,6 @@ impl<'a> Tokenizer<'a> {
         rest.len() >= s.len() && rest[..s.len()].eq_ignore_ascii_case(s.as_bytes())
     }
 
-    /// Moves past the next occurrence of `end` (case-insensitive), returning
-    /// what came before it.
     fn take_until_ci(&mut self, end: &str) -> &'a str {
         let rest = self.rest();
         match find_ci(rest.as_bytes(), end.as_bytes()) {
@@ -154,7 +140,6 @@ impl<'a> Tokenizer<'a> {
             }
             return Some(Token::End(name));
         }
-        // A start tag needs a letter after "<"; otherwise "<" is just text.
         let after = rest[1..].chars().next();
         if !after.map_or(false, |c| c.is_ascii_alphabetic()) {
             self.pos += 1;
@@ -329,7 +314,6 @@ impl TreeBuilder {
     }
 }
 
-/// Parses a whole document. The returned root is a "#document" element.
 pub fn parse(html: &str) -> Element {
     let mut tokens = Tokenizer { src: html, pos: 0 };
     let mut tree = TreeBuilder { stack: vec![Element::new("#document", Vec::new())] };

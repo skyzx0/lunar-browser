@@ -1,5 +1,3 @@
-//! HTML character references: &amp; &#169; &#xA9; and the common named ones.
-
 const NAMED: &[(&str, &str)] = &[
     ("amp", "&"), ("lt", "<"), ("gt", ">"), ("quot", "\""), ("apos", "'"), ("nbsp", "\u{a0}"),
     ("copy", "©"), ("reg", "®"), ("trade", "™"), ("mdash", "—"), ("ndash", "–"), ("hellip", "…"),
@@ -22,7 +20,6 @@ const NAMED: &[(&str, &str)] = &[
     ("Eacute", "É"), ("Ouml", "Ö"), ("Uuml", "Ü"), ("Ntilde", "Ñ"), ("Ccedil", "Ç"),
 ];
 
-/// Replaces character references in `s`. Unknown ones are left as written.
 pub fn decode(s: &str) -> String {
     if !s.contains('&') {
         return s.to_string();
@@ -42,7 +39,6 @@ pub fn decode(s: &str) -> String {
                 None => num.parse::<u32>().ok(),
             };
             code.map(|c| match c {
-                // Windows-1252 quirks that pages still rely on.
                 0x80 => '€', 0x91 => '‘', 0x92 => '’', 0x93 => '“', 0x94 => '”', 0x96 => '–', 0x97 => '—',
                 0 => '\u{fffd}',
                 c => char::from_u32(c).unwrap_or('\u{fffd}'),

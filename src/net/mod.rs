@@ -1,7 +1,3 @@
-//! Lunar's networking: its own HTTP/1.1 client and DNS-over-HTTPS resolver.
-//! Every connection is TLS (rustls, with Mozilla's root certificates); the
-//! only plain connections allowed are to this computer (localhost).
-
 pub mod dns;
 pub mod http;
 
@@ -32,7 +28,6 @@ fn tls_config() -> Arc<rustls::ClientConfig> {
         .clone()
 }
 
-/// A connection: TLS, or plain TCP for localhost only.
 pub enum Conn {
     Tls(Box<rustls::StreamOwned<rustls::ClientConnection, TcpStream>>),
     Plain(TcpStream),
@@ -44,7 +39,6 @@ impl Read for Conn {
             Conn::Tls(s) => s.read(buf),
             Conn::Plain(s) => s.read(buf),
         };
-        // Many servers close without a TLS goodbye; treat that as the end.
         match result {
             Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => Ok(0),
             other => other,
@@ -83,13 +77,11 @@ fn tcp(ips: &[IpAddr], port: u16) -> Result<TcpStream, String> {
     Err(format!("could not connect: {last}"))
 }
 
-/// Opens a TLS connection to `ips` and checks the certificate is for `name`.
 pub fn connect_tls(ips: &[IpAddr], port: u16, name: &str) -> Result<Conn, String> {
     let server_name = ServerName::try_from(name.to_string()).map_err(|_| format!("bad host name {name}"))?;
     let tcp = tcp(ips, port)?;
     let conn = rustls::ClientConnection::new(tls_config(), server_name).map_err(|e| e.to_string())?;
     let mut stream = rustls::StreamOwned::new(conn, tcp);
-    // Finish the handshake now so certificate problems surface as such.
     while stream.conn.is_handshaking() {
         stream.conn.complete_io(&mut stream.sock).map_err(|e| {
             let text = e.to_string();

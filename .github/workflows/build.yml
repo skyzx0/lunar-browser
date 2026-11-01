@@ -1,11 +1,5 @@
 name: Build Lunar Browser
 
-# Compiles Lunar Browser and Lunar Browser Milky Ray from this repository's
-# source for macOS (Apple Silicon + Intel), Windows (x64 + arm64) and Linux
-# (x64 + arm64), runs the engine's tests, builds Lunar Search's ready-made index with Lunar's own
-# crawler, and publishes everything as one release. About 3 hours, nearly
-# all of it the polite crawl (one request per second per site).
-
 on:
   workflow_dispatch:
 
@@ -54,7 +48,6 @@ jobs:
           key: ${{ matrix.system }}-${{ matrix.arch }}
 
       - name: Test the engine
-        # Tests run where the machine can run what it builds.
         if: matrix.arch == 'x86_64' && matrix.system != 'mac' || matrix.system == 'mac' && matrix.arch == 'aarch64' || matrix.os == 'ubuntu-24.04-arm'
         run: cargo test --release
 
@@ -90,8 +83,6 @@ jobs:
         run: cargo build --release
 
       - name: Crawl
-        # Starts from the last release's index (downloaded automatically) and
-        # grows it; stops at 30,000 pages or after 170 minutes.
         env:
           XDG_DATA_HOME: ${{ github.workspace }}/data
         run: |

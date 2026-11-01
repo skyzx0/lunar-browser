@@ -1,6 +1,3 @@
-//! Lunar's own pages, written as HTML and drawn by Lunar's engine like any
-//! other page.
-
 use crate::search::Results;
 
 fn escape(s: &str) -> String {

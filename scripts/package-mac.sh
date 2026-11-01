@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Builds "Lunar Browser.app" and "Lunar Browser Milky Ray.app", each in a .dmg.
-# usage: package-mac.sh <aarch64|x86_64> <version> <output dir>
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -14,7 +12,6 @@ trap 'rm -rf "$work"' EXIT
 
 cargo build --release --target "$target" --manifest-path "$root/Cargo.toml" --workspace
 
-# package <binary> <app name> <icon.icns> <bundle id> <file name>
 package() {
   local bin="$1" name="$2" icon="$3" id="$4" file="$5"
   local stage="$work/$bin"
@@ -43,7 +40,6 @@ package() {
 </dict>
 </plist>
 EOF
-  # No Apple Developer ID: sign ad hoc so it runs on Apple Silicon.
   codesign --force --sign - "$app"
   ln -s /Applications "$stage/Applications"
   hdiutil create -quiet -volname "$name" -srcfolder "$stage" -format UDZO -ov "$out/$file-$version-macos-$label.dmg"

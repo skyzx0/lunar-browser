@@ -1,4 +1,3 @@
-// Gives the Windows program Milky Ray's icon and name.
 fn main() {
     #[cfg(windows)]
     {

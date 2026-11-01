@@ -1,7 +1,3 @@
-//! Milky Ray's settings: one JSON file, written by the appearance editor and
-//! settings panels in the interface. Shared, so pages like the new tab page
-//! always use the current look.
-
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
@@ -24,7 +20,6 @@ pub fn data_dir() -> Option<PathBuf> {
     }
 }
 
-/// Where your own copy of the interface files lives, if you made one.
 pub fn ui_dir() -> Option<PathBuf> {
     data_dir().map(|d| d.join("ui"))
 }
@@ -75,7 +70,6 @@ impl Store {
         self.values.read().unwrap().get(key).and_then(Value::as_str).unwrap_or("").trim().to_string()
     }
 
-    /// Replaces all settings (sent by the interface) and saves them.
     pub fn replace(&self, values: Value) {
         if !values.is_object() {
             return;
@@ -90,8 +84,6 @@ impl Store {
         }
     }
 
-    /// Lunar Search by default; a custom search address (with %s for the
-    /// words) if one is set.
     pub fn search_url(&self, text: &str, lunar_search: &str) -> String {
         let q: String = url::form_urlencoded::byte_serialize(text.as_bytes()).collect();
         let custom = self.get_str("customSearch");

@@ -20,13 +20,10 @@ required-features = ["gui"]
 
 [features]
 default = ["gui"]
-# Lunar's own window. Milky Ray uses the library without it.
 gui = ["dep:eframe"]
 
 [dependencies]
-# Window, input and text drawing. Not a web engine: pages are laid out by src/engine.
 eframe = { version = "0.37", default-features = false, features = ["default_fonts", "glow", "wayland", "x11"], optional = true }
-# TLS for HTTPS and encrypted DNS, with Mozilla's root certificates.
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
 webpki-roots = "1.0"
 # URL parsing and gzip/deflate.

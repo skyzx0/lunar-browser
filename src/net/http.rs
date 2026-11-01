@@ -1,12 +1,3 @@
-//! Lunar's HTTP/1.1 client.
-//!
-//! - HTTPS only: http:// is upgraded (except localhost), redirects too
-//! - cookies live in memory, are only sent back to the exact host that set
-//!   them, and vanish when Lunar quits
-//! - sends Global Privacy Control and Do Not Track, no Referer, a generic
-//!   user agent
-//! - only the page itself is ever fetched: no scripts, images or trackers
-
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::sync::Mutex;
@@ -32,7 +23,6 @@ impl Response {
     }
 }
 
-/// Cookies, by exact host. Session only: never written anywhere.
 #[derive(Default)]
 pub struct CookieJar {
     by_host: HashMap<String, Vec<(String, String, String)>>,
@@ -87,7 +77,6 @@ pub struct Request {
     pub body: Option<Vec<u8>>,
 }
 
-/// http:// -> https:// (and ws -> wss) unless it is this computer.
 pub fn upgrade(mut url: Url) -> Url {
     if url.scheme() == "http" && !url.host_str().map_or(false, is_local) {
         let _ = url.set_scheme("https");
@@ -110,8 +99,6 @@ fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     haystack.windows(needle.len()).position(|w| w == needle)
 }
 
-/// Reads one response off `conn`: head, then a body sized by
-/// Content-Length, chunked encoding, or the end of the connection.
 pub fn read_response(conn: &mut Conn, max: usize) -> Result<Response, String> {
     let mut buf = Vec::with_capacity(16 * 1024);
     let mut chunk = [0u8; 16 * 1024];
@@ -271,18 +258,14 @@ fn send(req: &Request, jar: &Mutex<CookieJar>, resolver: &Resolver, agent: &str,
     Ok(response)
 }
 
-/// Fetches a page, following redirects (each one upgraded to https).
 pub fn fetch(req: Request, jar: &Mutex<CookieJar>, resolver: &Resolver) -> Result<Response, String> {
     fetch_as(req, jar, resolver, USER_AGENT)
 }
 
-/// Like `fetch`, with a different user agent (the search crawler's).
 pub fn fetch_as(req: Request, jar: &Mutex<CookieJar>, resolver: &Resolver, agent: &str) -> Result<Response, String> {
     fetch_limit(req, jar, resolver, agent, MAX_BODY)
 }
 
-/// Like `fetch_as`, accepting a body up to `max` bytes (for big downloads
-/// such as Lunar Search's index).
 pub fn fetch_limit(mut req: Request, jar: &Mutex<CookieJar>, resolver: &Resolver, agent: &str, max: usize) -> Result<Response, String> {
     req.url = upgrade(req.url);
     for _ in 0..=MAX_REDIRECTS {
@@ -305,7 +288,6 @@ pub fn fetch_limit(mut req: Request, jar: &Mutex<CookieJar>, resolver: &Resolver
     Err("ERR_TOO_MANY_REDIRECTS".into())
 }
 
-/// Decodes a body to text using the charset the server or page declares.
 pub fn decode_text(response: &Response) -> String {
     let declared = response
         .header("content-type")

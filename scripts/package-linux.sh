@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# Builds Lunar Browser and Lunar Browser Milky Ray for Linux: a .tar.gz and
-# a .deb for each.
-# usage: package-linux.sh <x86_64|aarch64> <version> <output dir>
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -15,7 +12,6 @@ trap 'rm -rf "$work"' EXIT
 
 cargo build --release --manifest-path "$root/Cargo.toml" --workspace
 
-# package <binary> <app name> <icon.png> <comment> <depends> <description>
 package() {
   local bin="$1" name="$2" icon="$3" comment="$4" depends="$5" description="$6"
   local file="$bin-$version-linux-$label"

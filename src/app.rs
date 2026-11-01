@@ -226,16 +226,17 @@ pub fn dump(input: &str, cols: usize) -> bool {
     !page.error
 }
 
-/// Crawls until the index holds `pages` pages (or the crawl is done):
-/// `lunar-browser --crawl <pages>`.
-pub fn crawl(pages: usize) {
+/// Crawls until the index holds `pages` pages, `minutes` pass, or the crawl
+/// is done: `lunar-browser --crawl <pages> [minutes]`.
+pub fn crawl(pages: usize, minutes: u64) {
     let search = Engine::open(settings::index_path(), true);
     let start = Instant::now();
     loop {
         std::thread::sleep(Duration::from_secs(5));
         let n = search.pages();
         eprintln!("{:>5}s  {n} pages", start.elapsed().as_secs());
-        if n >= pages || (start.elapsed() > Duration::from_secs(20) && !search.crawling()) {
+        let out_of_time = start.elapsed() > Duration::from_secs(minutes * 60);
+        if n >= pages || out_of_time || (start.elapsed() > Duration::from_secs(20) && !search.crawling()) {
             break;
         }
     }

@@ -17,7 +17,12 @@ use url::Url;
 use crawl::{Crawler, Frontier, Step, SEEDS};
 use index::{Hit, Index};
 
-const WORKERS: usize = 4;
+const WORKERS: usize = 12;
+/// Lunar Search's ready-made index, built by this project's release
+/// workflow with Lunar's own crawler and published with each release.
+const STARTER_INDEX: &str = "https://github.com/skyzx0/lunar-browser/releases/latest/download/lunar-search-index.gz";
+/// Below this many pages, the ready-made index is fetched to start from.
+const STARTER_BELOW: usize = 2000;
 const SAVE_EVERY: usize = 50;
 
 pub struct Engine {
@@ -76,6 +81,9 @@ impl Engine {
     fn load(&self) {
         if let Some(path) = &self.path {
             *self.index.write().unwrap() = Index::load(path);
+            if self.crawl.load(Ordering::SeqCst) && self.index.read().unwrap().len() < STARTER_BELOW {
+                self.fetch_starter(path);
+            }
         }
         // Start (or continue) the crawl from the seed sites, minus what is
         // already indexed from each.
@@ -98,6 +106,33 @@ impl Engine {
         drop(frontier);
         drop(index);
         self.loaded.store(true, Ordering::SeqCst);
+    }
+
+    /// Downloads the ready-made index and adds the pages crawled here so far.
+    fn fetch_starter(&self, path: &std::path::Path) {
+        let Ok(url) = Url::parse(STARTER_INDEX) else { return };
+        let net = (crate::net::dns::Resolver::new(), Mutex::new(crate::net::http::CookieJar::default()));
+        let request = crate::net::http::Request { url, method: "GET".into(), body: None };
+        let Ok(response) = crate::net::http::fetch_limit(request, &net.1, &net.0, crate::net::http::USER_AGENT, 400 << 20) else { return };
+        if response.status != 200 {
+            return;
+        }
+        let tmp = path.with_extension("download");
+        if std::fs::write(&tmp, &response.body).is_err() {
+            return;
+        }
+        let mut starter = Index::load(&tmp);
+        let _ = std::fs::remove_file(&tmp);
+        if starter.len() == 0 {
+            return;
+        }
+        let mut index = self.index.write().unwrap();
+        for page in index.pages() {
+            starter.add(page.clone());
+        }
+        *index = starter;
+        drop(index);
+        self.save();
     }
 
     fn work(&self) {

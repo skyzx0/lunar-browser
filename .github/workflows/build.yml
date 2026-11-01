@@ -2,7 +2,9 @@ name: Build Lunar Browser
 
 # Compiles Lunar Browser from this repository's source for macOS (Apple
 # Silicon + Intel), Windows (x64 + arm64) and Linux (x64 + arm64), runs the
-# engine's tests, and publishes everything as one release. About 10 minutes.
+# engine's tests, builds Lunar Search's ready-made index with Lunar's own
+# crawler, and publishes everything as one release. About 3 hours, nearly
+# all of it the polite crawl (one request per second per site).
 
 on:
   workflow_dispatch:
@@ -67,8 +69,44 @@ jobs:
           path: out/*
           if-no-files-found: error
 
+  index:
+    runs-on: ubuntu-latest
+    timeout-minutes: 200
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Linux libraries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev \
+            libxrandr-dev libxi-dev libgl1-mesa-dev
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: index
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Crawl
+        # Starts from the last release's index (downloaded automatically) and
+        # grows it; stops at 30,000 pages or after 170 minutes.
+        env:
+          XDG_DATA_HOME: ${{ github.workspace }}/data
+        run: |
+          target/release/lunar-browser --crawl 30000 170
+          mkdir -p out
+          cp data/lunar-browser/search-index.gz out/lunar-search-index.gz
+          ls -lh out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lunar-search-index
+          path: out/*
+          if-no-files-found: error
+
   publish:
-    needs: build
+    needs: [build, index]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

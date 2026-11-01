@@ -52,7 +52,7 @@ pub fn search(query: &str, results: &Results) -> String {
         q = escape(query)
     );
     let status = if !results.loaded {
-        "Opening the index...".to_string()
+        "Opening the index (the first time, Lunar downloads its ready-made index, which can take a minute)...".to_string()
     } else if results.crawling {
         format!("{} pages indexed so far; Lunar Search is still crawling, so results keep improving.", results.pages)
     } else {

@@ -14,7 +14,7 @@ use flate2::{read::GzDecoder, write::GzEncoder, Compression};
 const HEADER: &str = "LUNAR-INDEX 1";
 const TITLE_WEIGHT: u32 = 4;
 /// Text kept per page, for ranking and snippets.
-pub const MAX_TEXT: usize = 20_000;
+pub const MAX_TEXT: usize = 5_000;
 
 const STOP: &[&str] = &[
     "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "has", "in", "is", "it", "its", "of", "on",
@@ -63,6 +63,10 @@ fn clean(s: &str) -> String {
 impl Index {
     pub fn len(&self) -> usize {
         self.pages.len()
+    }
+
+    pub fn pages(&self) -> &[Page] {
+        &self.pages
     }
 
     pub fn urls(&self) -> impl Iterator<Item = &str> {

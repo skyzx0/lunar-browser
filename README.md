@@ -29,10 +29,21 @@ Lunar's own search engine. It crawls the web with Lunar's own network
 stack, keeps its index on your computer, and ranks results there, so no
 search company ever sees what you search for.
 
-- It starts from a curated set of sites (Wikipedia's vital articles,
-  Wikinews, AP, BBC, the Guardian, NPR, Ars Technica, The Conversation,
-  NASA, Project Gutenberg, docs for Rust, Python, Go, MDN and Arch Linux)
-  and grows to about 4,000 pages in the background
+- It starts from about 110 sites: Wikipedia's 10,000 level-4 vital
+  articles, other Wikimedia projects and Wikipedias (Italian, German,
+  French, Spanish), Britannica, the Stanford Encyclopedia of Philosophy,
+  world news (AP, BBC, the Guardian, NPR, DW, France 24, ABC, CBC, PBS...),
+  science (NASA, ESA, Quanta, ScienceDaily, phys.org...), health (NHS,
+  MedlinePlus, CDC), government (gov.uk, usa.gov), programming docs (MDN,
+  Rust, Python, Go, C++, PostgreSQL, Kubernetes, Arch Wiki, man pages...),
+  blogs, books, recipes and more
+- It discovers sites those pages link to and takes a few pages from each,
+  up to about 2,000 more sites; social networks, app stores and login-only
+  sites are skipped
+- **Ready-made index:** every release, GitHub crawls about 30,000 pages
+  with Lunar's own crawler and publishes the index with the release.
+  Lunar downloads it on first launch (from this project's own releases),
+  then keeps growing its copy locally
 - Any site you're on can be added: settings bar > `[ index this site ]`
 - It obeys robots.txt and `<meta name="robots">`, sends at most one request
   per second to any site, and identifies itself as `LunarSearch/1.0`
@@ -40,8 +51,8 @@ search company ever sees what you search for.
 - Crawling can be switched off in the settings bar; the index is a file
   in Lunar's data folder (`search-index.gz`)
 
-It knows thousands of pages, not billions: a big web search engine needs
-data centers. What it has, it searches privately and instantly.
+It knows tens of thousands of pages, not billions: a big web search engine
+needs data centers. What it has, it searches privately and instantly.
 
 ## What it does, and doesn't
 

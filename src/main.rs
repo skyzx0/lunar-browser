@@ -64,7 +64,8 @@ fn main() -> eframe::Result<()> {
         std::process::exit(if ok { 0 } else { 1 });
     }
     if args.len() >= 3 && args[1] == "--crawl" {
-        app::crawl(args[2].parse().unwrap_or(1000));
+        let minutes = args.get(3).and_then(|m| m.parse().ok()).unwrap_or(24 * 60);
+        app::crawl(args[2].parse().unwrap_or(1000), minutes);
         return Ok(());
     }
     let icon = eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon.png")).ok();

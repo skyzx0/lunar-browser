@@ -19,29 +19,138 @@ use super::index::{Page, MAX_TEXT};
 
 pub const CRAWLER_AGENT: &str = "LunarSearch";
 const PER_SITE_DELAY: Duration = Duration::from_millis(1100);
+/// Sites found through links get this many pages each, up to this many sites.
+const DISCOVER_PAGES: usize = 12;
+const DISCOVER_SITES: usize = 2000;
+/// Never crawled: social networks, app stores, link shorteners, login walls
+/// and file hosts (they need JavaScript or an account, or aren't pages).
+const NEVER: &[&str] = &[
+    "facebook.com", "fb.com", "twitter.com", "x.com", "t.co", "instagram.com", "threads.net", "tiktok.com",
+    "youtube.com", "youtu.be", "linkedin.com", "pinterest.com", "reddit.com", "redd.it", "snapchat.com",
+    "whatsapp.com", "telegram.org", "t.me", "discord.com", "discord.gg", "google.com", "goo.gl", "googleapis.com",
+    "gstatic.com", "doubleclick.net", "amazon.com", "amzn.to", "apps.apple.com", "play.google.com", "bit.ly",
+    "tinyurl.com", "ow.ly", "buff.ly", "medium.com", "paypal.com", "patreon.com", "archive.org", "web.archive.org",
+    "wikidata.org", "wikimedia.org", "mediawiki.org", "doi.org", "github.com", "githubusercontent.com",
+    "bsky.app", "mastodon.social", "flickr.com", "vimeo.com", "spotify.com", "soundcloud.com", "twitch.tv",
+];
 
-/// Where the crawl starts: (address, pages to take from that site, link depth).
+/// Where the crawl starts: (address, pages to take from that site, link
+/// depth). Sites linked from these are discovered too (see DISCOVER_*).
+/// Sites whose robots.txt forbids crawling are skipped automatically.
 pub const SEEDS: &[(&str, usize, u8)] = &[
-    ("https://en.wikipedia.org/wiki/Wikipedia:Vital_articles", 1200, 1),
-    ("https://en.wikipedia.org/wiki/Main_Page", 150, 1),
-    ("https://simple.wikipedia.org/wiki/Main_Page", 200, 2),
-    ("https://en.wikinews.org/wiki/Main_Page", 120, 2),
-    ("https://apnews.com/", 120, 2),
-    ("https://www.bbc.com/news", 120, 2),
-    ("https://www.theguardian.com/international", 120, 2),
-    ("https://www.npr.org/sections/news/", 100, 2),
-    ("https://arstechnica.com/", 100, 2),
-    ("https://theconversation.com/global", 100, 2),
-    ("https://www.gutenberg.org/browse/scores/top", 150, 1),
-    ("https://doc.rust-lang.org/book/", 150, 2),
-    ("https://docs.python.org/3/tutorial/index.html", 120, 2),
-    ("https://go.dev/doc/", 80, 2),
-    ("https://wiki.archlinux.org/title/Table_of_contents", 200, 2),
-    ("https://developer.mozilla.org/en-US/docs/Web/HTML", 150, 2),
-    ("https://news.ycombinator.com/", 60, 1),
-    ("https://www.nasa.gov/", 80, 2),
-    ("https://www.kernel.org/", 30, 2),
+    // Reference: Wikipedia's 10,000 level-4 vital articles, by topic
+    ("https://en.wikipedia.org/wiki/Wikipedia:Vital_articles/Level/4/People", 700, 1),
+    ("https://en.wikipedia.org/wiki/Wikipedia:Vital_articles/Level/4/History", 500, 1),
+    ("https://en.wikipedia.org/wiki/Wikipedia:Vital_articles/Level/4/Geography", 600, 1),
+    ("https://en.wikipedia.org/wiki/Wikipedia:Vital_articles/Level/4/Arts", 400, 1),
+    ("https://en.wikipedia.org/wiki/Wikipedia:Vital_articles/Level/4/Philosophy_and_religion", 250, 1),
+    ("https://en.wikipedia.org/wiki/Wikipedia:Vital_articles/Level/4/Everyday_life", 300, 1),
+    ("https://en.wikipedia.org/wiki/Wikipedia:Vital_articles/Level/4/Society_and_social_sciences", 450, 1),
+    ("https://en.wikipedia.org/wiki/Wikipedia:Vital_articles/Level/4/Biology_and_health_sciences", 550, 1),
+    ("https://en.wikipedia.org/wiki/Wikipedia:Vital_articles/Level/4/Physical_sciences", 500, 1),
+    ("https://en.wikipedia.org/wiki/Wikipedia:Vital_articles/Level/4/Technology", 400, 1),
+    ("https://en.wikipedia.org/wiki/Wikipedia:Vital_articles/Level/4/Mathematics", 250, 1),
+    ("https://simple.wikipedia.org/wiki/Main_Page", 600, 2),
+    ("https://en.wikivoyage.org/wiki/Main_Page", 400, 2),
+    ("https://en.wikibooks.org/wiki/Main_Page", 250, 2),
+    ("https://en.wikiquote.org/wiki/Main_Page", 150, 2),
+    ("https://en.wikinews.org/wiki/Main_Page", 250, 2),
+    ("https://it.wikipedia.org/wiki/Pagina_principale", 300, 2),
+    ("https://de.wikipedia.org/wiki/Wikipedia:Hauptseite", 250, 2),
+    ("https://fr.wikipedia.org/wiki/Wikip%C3%A9dia:Accueil_principal", 250, 2),
+    ("https://es.wikipedia.org/wiki/Wikipedia:Portada", 250, 2),
+    ("https://www.britannica.com/", 400, 2),
+    ("https://plato.stanford.edu/contents.html", 400, 1),
+    ("https://iep.utm.edu/", 200, 2),
+    ("https://mathworld.wolfram.com/", 250, 2),
+    ("https://hyperphysics.phy-astr.gsu.edu/hbase/hframe.html", 200, 2),
+    ("https://ourworldindata.org/", 200, 2),
+    ("https://www.gutenberg.org/browse/scores/top", 250, 1),
+    ("https://standardebooks.org/ebooks", 150, 1),
+    ("https://www.poetryfoundation.org/", 150, 2),
+    ("https://www.loc.gov/", 150, 2),
+    // News
+    ("https://apnews.com/", 300, 2),
+    ("https://www.bbc.com/news", 300, 2),
+    ("https://www.theguardian.com/international", 300, 2),
+    ("https://www.npr.org/sections/news/", 250, 2),
+    ("https://www.dw.com/en/", 200, 2),
+    ("https://www.france24.com/en/", 200, 2),
+    ("https://www.abc.net.au/news", 200, 2),
+    ("https://www.cbc.ca/news", 200, 2),
+    ("https://www.euronews.com/", 150, 2),
+    ("https://www.pbs.org/newshour/", 150, 2),
+    ("https://www.propublica.org/", 150, 2),
+    ("https://www.independent.co.uk/", 150, 2),
+    ("https://theconversation.com/global", 250, 2),
+    ("https://www.smithsonianmag.com/", 200, 2),
+    // Science
+    ("https://www.sciencedaily.com/", 250, 2),
+    ("https://phys.org/", 250, 2),
+    ("https://www.quantamagazine.org/", 200, 2),
+    ("https://www.space.com/", 150, 2),
+    ("https://www.nasa.gov/", 250, 2),
+    ("https://www.esa.int/", 150, 2),
+    ("https://www.noaa.gov/", 150, 2),
+    ("https://www.usgs.gov/", 150, 2),
+    ("https://arxiv.org/list/cs/recent", 150, 1),
+    // Health and government
+    ("https://www.nhs.uk/conditions/", 400, 1),
+    ("https://medlineplus.gov/healthtopics.html", 400, 1),
+    ("https://www.cdc.gov/", 200, 2),
+    ("https://www.gov.uk/browse", 250, 2),
+    ("https://www.usa.gov/", 150, 2),
+    ("https://www.nps.gov/index.htm", 150, 2),
+    ("https://www.archives.gov/", 100, 2),
+    // Technology and programming
+    ("https://arstechnica.com/", 250, 2),
+    ("https://lwn.net/", 150, 2),
+    ("https://techcrunch.com/", 150, 2),
+    ("https://news.ycombinator.com/", 100, 1),
+    ("https://developer.mozilla.org/en-US/docs/Web", 500, 2),
+    ("https://doc.rust-lang.org/book/", 250, 2),
+    ("https://doc.rust-lang.org/std/", 150, 1),
+    ("https://docs.python.org/3/", 400, 2),
+    ("https://go.dev/doc/", 200, 2),
+    ("https://en.cppreference.com/w/", 250, 2),
+    ("https://www.php.net/manual/en/", 200, 2),
+    ("https://kotlinlang.org/docs/home.html", 150, 2),
+    ("https://www.typescriptlang.org/docs/", 120, 2),
+    ("https://react.dev/learn", 120, 2),
+    ("https://vuejs.org/guide/introduction.html", 100, 2),
+    ("https://docs.djangoproject.com/en/stable/", 150, 2),
+    ("https://nodejs.org/en/learn", 100, 2),
+    ("https://git-scm.com/docs", 150, 1),
+    ("https://www.postgresql.org/docs/current/", 250, 2),
+    ("https://www.sqlite.org/docs.html", 150, 1),
+    ("https://nginx.org/en/docs/", 120, 2),
+    ("https://docs.docker.com/get-started/", 150, 2),
+    ("https://kubernetes.io/docs/home/", 200, 2),
+    ("https://wiki.archlinux.org/title/Table_of_contents", 400, 2),
+    ("https://wiki.debian.org/FrontPage", 150, 2),
+    ("https://docs.freebsd.org/en/books/handbook/", 150, 2),
+    ("https://www.gnu.org/manual/manual.html", 150, 2),
+    ("https://man7.org/linux/man-pages/dir_all_alphabetic.html", 300, 1),
+    ("https://www.kernel.org/", 50, 2),
+    ("https://www.w3.org/", 100, 2),
+    // Blogs and essays
+    ("https://paulgraham.com/articles.html", 150, 1),
+    ("https://danluu.com/", 120, 1),
+    ("https://jvns.ca/", 120, 1),
+    ("https://martinfowler.com/", 120, 2),
+    ("https://www.joelonsoftware.com/", 80, 2),
+    ("https://blog.codinghorror.com/", 80, 2),
+    ("https://daringfireball.net/", 80, 2),
+    ("https://kottke.org/", 80, 2),
+    ("https://xkcd.com/archive/", 150, 1),
+    ("https://waitbutwhy.com/archive", 80, 1),
+    // Culture, food, travel, outdoors
+    ("https://www.seriouseats.com/", 150, 2),
+    ("https://www.budgetbytes.com/", 120, 2),
+    ("https://www.simplyrecipes.com/", 120, 2),
+    ("https://www.si.edu/", 100, 2),
     ("https://www.openstreetmap.org/about", 30, 2),
+    ("https://www.ifixit.com/Guide", 120, 2),
 ];
 
 const SKIP_EXTENSIONS: &[&str] = &[
@@ -113,6 +222,10 @@ impl Robots {
     }
 }
 
+fn never(host: &str) -> bool {
+    NEVER.iter().any(|d| host == *d || host.ends_with(&format!(".{d}")))
+}
+
 struct Site {
     queue: VecDeque<(String, u8)>,
     next: Instant,
@@ -126,6 +239,7 @@ struct Site {
 pub struct Frontier {
     sites: HashMap<String, Site>,
     seen: HashSet<String>,
+    discovered: usize,
 }
 
 pub fn normalize(url: &Url) -> Option<String> {
@@ -167,8 +281,28 @@ impl Frontier {
 
     fn push(&mut self, url: String, depth: u8) {
         let Some(host) = Url::parse(&url).ok().and_then(|u| u.host_str().map(String::from)) else { return };
-        // Only sites the crawl was pointed at: no wandering off across the web.
-        let Some(site) = self.sites.get_mut(&host) else { return };
+        if never(&host) {
+            return;
+        }
+        // A new site, linked from near the top of a known one: take a few pages.
+        if !self.sites.contains_key(&host) {
+            if depth > 2 || self.discovered >= DISCOVER_SITES {
+                return;
+            }
+            self.discovered += 1;
+            self.sites.insert(host.clone(), Site {
+                queue: VecDeque::new(),
+                next: Instant::now(),
+                taken: 0,
+                limit: DISCOVER_PAGES,
+                max_depth: 1,
+            });
+            if self.seen.insert(url.clone()) {
+                self.sites.get_mut(&host).unwrap().queue.push_back((url, 0));
+            }
+            return;
+        }
+        let site = self.sites.get_mut(&host).unwrap();
         if depth > site.max_depth || site.queue.len() + site.taken >= site.limit * 3 || !self.seen.insert(url.clone()) {
             return;
         }
@@ -214,7 +348,8 @@ fn links(el: &Element, out: &mut Vec<String>) {
     for child in &el.children {
         if let Node::Element(e) = child {
             if e.tag == "a" {
-                let nofollow = e.attr("rel").map_or(false, |r| r.contains("nofollow"));
+                // rel=nofollow, and links to the same page in other languages, aren't followed.
+                let nofollow = e.attr("rel").map_or(false, |r| r.contains("nofollow")) || e.attr("hreflang").is_some();
                 if let (Some(href), false) = (e.attr("href"), nofollow) {
                     out.push(href.trim().to_string());
                 }
@@ -383,12 +518,15 @@ mod tests {
     }
 
     #[test]
-    fn frontier_stays_on_seed_sites() {
+    fn frontier_limits_and_discovery() {
         let mut f = Frontier::default();
         f.add_site("https://a.example/", 2, 1);
         f.push("https://a.example/x".into(), 1);
-        f.push("https://elsewhere.example/".into(), 1);
         f.push("https://a.example/too-deep".into(), 2);
         assert_eq!(f.pending(), 2);
+        f.push("https://elsewhere.example/page".into(), 1); // discovered: a new site
+        f.push("https://www.youtube.com/watch?v=1".into(), 1); // never crawled
+        assert_eq!(f.pending(), 3);
+        assert_eq!(f.discovered, 1);
     }
 }

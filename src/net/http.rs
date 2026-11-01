@@ -226,7 +226,7 @@ fn read_chunked(conn: &mut Conn, mut pending: Vec<u8>, max: usize) -> Result<Vec
     }
 }
 
-fn send(req: &Request, jar: &Mutex<CookieJar>, resolver: &Resolver, agent: &str) -> Result<Response, String> {
+fn send(req: &Request, jar: &Mutex<CookieJar>, resolver: &Resolver, agent: &str, max: usize) -> Result<Response, String> {
     let url = &req.url;
     let mut conn = open(url, resolver)?;
     let host = match url.port() {
@@ -260,7 +260,7 @@ fn send(req: &Request, jar: &Mutex<CookieJar>, resolver: &Resolver, agent: &str)
         conn.write_all(body).map_err(|e| format!("ERR_CONNECTION: {e}"))?;
     }
     conn.flush().ok();
-    let mut response = read_response(&mut conn, MAX_BODY)?;
+    let mut response = read_response(&mut conn, max)?;
     response.url = url.clone();
     let mut jar = jar.lock().unwrap();
     for (k, v) in &response.headers {
@@ -277,10 +277,16 @@ pub fn fetch(req: Request, jar: &Mutex<CookieJar>, resolver: &Resolver) -> Resul
 }
 
 /// Like `fetch`, with a different user agent (the search crawler's).
-pub fn fetch_as(mut req: Request, jar: &Mutex<CookieJar>, resolver: &Resolver, agent: &str) -> Result<Response, String> {
+pub fn fetch_as(req: Request, jar: &Mutex<CookieJar>, resolver: &Resolver, agent: &str) -> Result<Response, String> {
+    fetch_limit(req, jar, resolver, agent, MAX_BODY)
+}
+
+/// Like `fetch_as`, accepting a body up to `max` bytes (for big downloads
+/// such as Lunar Search's index).
+pub fn fetch_limit(mut req: Request, jar: &Mutex<CookieJar>, resolver: &Resolver, agent: &str, max: usize) -> Result<Response, String> {
     req.url = upgrade(req.url);
     for _ in 0..=MAX_REDIRECTS {
-        let response = send(&req, jar, resolver, agent)?;
+        let response = send(&req, jar, resolver, agent, max)?;
         if matches!(response.status, 301 | 302 | 303 | 307 | 308) {
             let location = response.header("location").ok_or("redirect without a location")?;
             let next = req.url.join(location).map_err(|e| format!("bad redirect: {e}"))?;

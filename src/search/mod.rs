@@ -14,7 +14,6 @@ use index::{Hit, Index};
 
 const WORKERS: usize = 12;
 const STARTER_INDEX: &str = "https://github.com/skyzx0/lunar-browser/releases/latest/download/lunar-search-index.gz";
-const STARTER_BELOW: usize = 2000;
 const SAVE_EVERY: usize = 50;
 
 pub struct Engine {
@@ -70,8 +69,9 @@ impl Engine {
     fn load(&self) {
         if let Some(path) = &self.path {
             *self.index.write().unwrap() = Index::load(path);
-            if self.crawl.load(Ordering::SeqCst) && self.index.read().unwrap().len() < STARTER_BELOW {
-                self.fetch_starter(path);
+            let marker = path.with_extension("starter");
+            if self.crawl.load(Ordering::SeqCst) && !marker.exists() && self.fetch_starter(path) {
+                let _ = std::fs::write(marker, STARTER_INDEX);
             }
         }
         let index = self.index.read().unwrap();
@@ -95,22 +95,25 @@ impl Engine {
         self.loaded.store(true, Ordering::SeqCst);
     }
 
-    fn fetch_starter(&self, path: &std::path::Path) {
-        let Ok(url) = Url::parse(STARTER_INDEX) else { return };
+    fn fetch_starter(&self, path: &std::path::Path) -> bool {
+        let Ok(url) = Url::parse(STARTER_INDEX) else { return false };
         let net = (crate::net::dns::Resolver::new(), Mutex::new(crate::net::http::CookieJar::default()));
         let request = crate::net::http::Request { url, method: "GET".into(), body: None };
-        let Ok(response) = crate::net::http::fetch_limit(request, &net.1, &net.0, crate::net::http::USER_AGENT, 400 << 20) else { return };
+        let Ok(response) = crate::net::http::fetch_limit(request, &net.1, &net.0, crate::net::http::USER_AGENT, 400 << 20) else { return false };
         if response.status != 200 {
-            return;
+            return false;
+        }
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
         }
         let tmp = path.with_extension("download");
         if std::fs::write(&tmp, &response.body).is_err() {
-            return;
+            return false;
         }
         let mut starter = Index::load(&tmp);
         let _ = std::fs::remove_file(&tmp);
         if starter.len() == 0 {
-            return;
+            return false;
         }
         let mut index = self.index.write().unwrap();
         for page in index.pages() {
@@ -119,6 +122,7 @@ impl Engine {
         *index = starter;
         drop(index);
         self.save();
+        true
     }
 
     fn work(&self) {

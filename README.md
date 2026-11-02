@@ -33,13 +33,20 @@ Linux). It isn't a fork and doesn't bundle an engine, so it's a few MB.
 Everything around the page is Milky Ray's own, and all of it can be
 restyled:
 
-- **10 themes**: Milky Ray, Nebula, Aurora, Ocean, Forest, Solar Flare,
-  Sakura, Paper, OLED Midnight, Lunar Terminal
-- **Every color**: background gradient (two colors and an angle), accent,
-  text, secondary text, light or dark
-- **Wallpaper**: drifting starfield, gradient, solid, or your own picture
-- **Glass and shape**: blur strength, corner roundness, density, pages
-  framed or edge to edge
+- **Themes**: classic color schemes with their authors' own colors
+  (Gruvbox dark and light, Nord, Solarized dark and light, Rosé Pine and
+  Rosé Pine Dawn, Everforest, Kanagawa, Monokai, Zenburn), neutral Graphite
+  and Porcelain, Lunar Terminal, and Match system, which follows your
+  computer's light or dark mode
+- **Every color**: window, surfaces, accent, text, secondary text, light or
+  dark; a gradient or your own picture as the background
+- **Transparency**: every part has its own opacity (window background, tab
+  bar, toolbar, sidebar, the frame behind pages, panels), blur behind the
+  bars, real blur of the desktop behind the window (macOS and Windows), and
+  see-through web pages: transparent page backgrounds, everything clear
+  with only text and pictures left, or the whole page faded. One button
+  makes everything see-through, another makes it solid again
+- **Shape**: corner radius, density, pages framed or edge to edge
 - **Text**: system, rounded, serif, mono or VT323; interface and page size
 - **Layout**: tabs on top or in a sidebar (left or right); five tab styles;
   toolbar on top or bottom; bookmarks bar, status bar and home button on

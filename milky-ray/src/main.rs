@@ -48,6 +48,7 @@ struct App {
     next_id: u64,
     content: (f64, f64, f64, f64),
     overlay: bool,
+    backdrop: String,
     store: Store,
     search: Arc<Engine>,
     proxy: EventLoopProxy<UserEvent>,
@@ -107,28 +108,87 @@ fn ui_file(name: &str) -> Option<Vec<u8>> {
     }
 }
 
+fn page_style(store: &Store) -> (Value, f64, Value) {
+    (
+        json!(store.get_str("siteCss")),
+        store.get_f64(&["theme", "pageOpacity"], 100.0),
+        json!(store.get_str_at(&["theme", "pageBackground"])),
+    )
+}
+
 fn page_script(store: &Store) -> String {
-    let css = store.get_str("siteCss");
+    let (css, opacity, mode) = page_style(store);
     let js = store.get_str("siteJs");
-    let opacity = store.get_f64(&["theme", "pageOpacity"], 100.0);
     format!(
         r#"(function () {{
-  function apply(css, opacity) {{
+  function apply(css, opacity, mode) {{
+    var extra = '';
+    if (mode === 'transparent') extra += 'html, body {{ background: transparent !important; }}';
+    if (mode === 'all') extra += 'html, body, body * {{ background-color: transparent !important; }} body *:not(img):not(video):not(picture):not(canvas):not(svg) {{ background-image: none !important; }}';
+    if (opacity < 100) extra += 'html {{ opacity: ' + (opacity / 100) + ' !important; }}';
     var s = document.getElementById('__milky_style');
-    if (!s) {{ s = document.createElement('style'); s.id = '__milky_style'; (document.head || document.documentElement).appendChild(s); }}
-    s.textContent = css + (opacity < 100 ? '
-html {{ opacity: ' + (opacity / 100) + ' !important; }}' : '');
+    if (!s) {{ s = document.createElement('style'); s.id = '__milky_style'; }}
+    if (!s.isConnected) (document.head || document.documentElement).appendChild(s);
+    s.textContent = css + ' ' + extra;
   }}
   window.__milkyApply = apply;
-  var css = {css}, opacity = {opacity};
-  if (document.documentElement) apply(css, opacity);
-  document.addEventListener('DOMContentLoaded', function () {{ apply(css, opacity); }});
+  var args = [{css}, {opacity}, {mode}];
+  if (document.documentElement) apply.apply(null, args);
+  document.addEventListener('DOMContentLoaded', function () {{ apply.apply(null, args); }});
 }})();
-try {{ {js} }} catch (e) {{ console.error('Milky Ray site script:', e); }}"#,
-        css = json!(css),
-        opacity = opacity,
-        js = js,
+try {{ {js} }} catch (e) {{ console.error('Milky Ray site script:', e); }}"#
     )
+}
+
+fn apply_backdrop(window: &Window, mode: &str, light: bool) {
+    #[cfg(target_os = "macos")]
+    {
+        use window_vibrancy::{apply_vibrancy, clear_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
+        let _ = clear_vibrancy(window);
+        let material = match mode {
+            "frosted" if light => Some(NSVisualEffectMaterial::Sidebar),
+            "frosted" => Some(NSVisualEffectMaterial::UnderWindowBackground),
+            "smoked" => Some(NSVisualEffectMaterial::HudWindow),
+            _ => None,
+        };
+        if let Some(material) = material {
+            let _ = apply_vibrancy(window, material, Some(NSVisualEffectState::Active), None);
+        }
+    }
+    #[cfg(windows)]
+    {
+        use window_vibrancy::{apply_acrylic, apply_mica, clear_acrylic, clear_mica};
+        let _ = clear_mica(window);
+        let _ = clear_acrylic(window);
+        match mode {
+            "frosted" => {
+                if apply_mica(window, Some(!light)).is_err() {
+                    let _ = apply_acrylic(window, None);
+                }
+            }
+            "smoked" => {
+                let _ = apply_acrylic(window, Some((10, 10, 12, 140)));
+            }
+            _ => {}
+        }
+    }
+    #[cfg(target_os = "linux")]
+    let _ = (window, mode, light);
+}
+
+fn unique_path(dir: &std::path::Path, name: &str) -> std::path::PathBuf {
+    let candidate = dir.join(name);
+    if !candidate.exists() {
+        return candidate;
+    }
+    let (stem, ext) = match name.rsplit_once('.') {
+        Some((s, e)) if !s.is_empty() => (s.to_string(), format!(".{e}")),
+        _ => (name.to_string(), String::new()),
+    };
+    (1..1000)
+        .map(|n| dir.join(format!("{stem} ({n}){ext}")))
+        .find(|p| !p.exists())
+        .unwrap_or(candidate)
 }
 
 fn reveal(path: &std::path::Path) {
@@ -148,6 +208,16 @@ fn build_child(builder: WebViewBuilder, fixed: &gtk::Fixed) -> wry::Result<WebVi
 }
 
 impl App {
+
+    fn apply_backdrop(&mut self) {
+        let mode = self.store.get_str_at(&["theme", "backdrop"]);
+        let light = self.store.get_bool_at(&["theme", "light"]);
+        let key = format!("{mode}/{light}");
+        if key != self.backdrop {
+            apply_backdrop(&self.window, &mode, light);
+            self.backdrop = key;
+        }
+    }
 
     fn window_size(&self) -> (f64, f64) {
         let size = self.window.inner_size().to_logical::<f64>(self.window.scale_factor());
@@ -256,7 +326,7 @@ impl App {
                     .filter(|n| !n.is_empty())
                     .unwrap_or_else(|| url.rsplit('/').next().unwrap_or("download").split('?').next().unwrap_or("download").to_string());
                 if let Some(dir) = store::downloads_dir() {
-                    *path = dir.join(&name);
+                    *path = unique_path(&dir, &name);
                 }
                 let _ = p5.send_event(UserEvent::Downloaded(name));
                 true
@@ -428,6 +498,15 @@ impl App {
                     let _ = v.reload();
                 }
             }
+            "stop" => {
+                if let Some(v) = self.active_view() {
+                    let _ = v.evaluate_script("window.stop()");
+                }
+                if let Some(tab) = self.tabs.get_mut(self.active) {
+                    tab.loading = false;
+                }
+                self.send_state();
+            }
             "home" => {
                 let home = self.store.home_url(&internal("newtab"));
                 if let Some(v) = self.active_view() {
@@ -457,14 +536,12 @@ impl App {
                 if let Some(settings) = msg.get("settings") {
                     self.store.replace(settings.clone());
                     self.search.set_crawl(self.store.get_bool("crawl", true));
-                    let call = format!(
-                        "window.__milkyApply && window.__milkyApply({}, {})",
-                        json!(self.store.get_str("siteCss")),
-                        self.store.get_f64(&["theme", "pageOpacity"], 100.0)
-                    );
+                    let (css, opacity, mode) = page_style(&self.store);
+                    let call = format!("window.__milkyApply && window.__milkyApply({css}, {opacity}, {mode})");
                     for tab in &self.tabs {
                         let _ = tab.view.evaluate_script(&call);
                     }
+                    self.apply_backdrop();
                 }
             }
             "uiFiles" => match store::ui_dir() {
@@ -553,11 +630,30 @@ impl App {
                     self.new_tab(Some("https://example.com/".into()));
                     self.new_tab(Some(internal("search?q=moon")));
                 }
+                "selftest-style" => {
+                    let mut settings: Value = serde_json::from_str(&self.store.json()).unwrap_or(json!({}));
+                    settings["siteCss"] = json!("body { outline: 3px solid rgb(255, 0, 0) }");
+                    settings["theme"]["pageBackground"] = json!("all");
+                    settings["theme"]["backdrop"] = json!("frosted");
+                    self.handle_ipc(&json!({ "cmd": "saveSettings", "settings": settings }).to_string());
+                    self.handle_ipc(r#"{"cmd":"stop"}"#);
+                }
                 "selftest-report" => {
                     for t in &self.tabs {
                         eprintln!("tab {} | loading={} | {} | {}", t.id, t.loading, friendly(&t.url), t.title);
                     }
-                    std::process::exit(0);
+                    eprintln!("lunar search pages: {}", self.search.pages());
+                    if let Some(tab) = self.tabs.iter().find(|t| t.url.contains("example.com")) {
+                        let _ = tab.view.evaluate_script_with_callback(
+                            "JSON.stringify({ style: (document.getElementById('__milky_style') || {}).textContent, outline: getComputedStyle(document.body).outlineColor, bodyBackground: getComputedStyle(document.body).backgroundColor })",
+                            |result| {
+                                eprintln!("page check: {result}");
+                                std::process::exit(0);
+                            },
+                        );
+                    } else {
+                        std::process::exit(0);
+                    }
                 }
                 _ => {}
             },
@@ -734,11 +830,13 @@ fn main() -> wry::Result<()> {
         next_id: 1,
         content: (0.0, 96.0, 1320.0, 764.0),
         overlay: false,
+        backdrop: String::new(),
         store,
         search,
         proxy,
     };
     app.layout();
+    app.apply_backdrop();
     app.new_tab(None);
     let _menu = menu;
 
@@ -747,7 +845,10 @@ fn main() -> wry::Result<()> {
         std::thread::spawn(move || {
             std::thread::sleep(std::time::Duration::from_secs(3));
             let _ = p.send_event(UserEvent::Menu("selftest-open".into()));
-            std::thread::sleep(std::time::Duration::from_secs(10));
+            std::thread::sleep(std::time::Duration::from_secs(8));
+            let _ = p.send_event(UserEvent::Menu("selftest-style".into()));
+            let wait = std::env::var("MILKY_SELFTEST").ok().and_then(|v| v.parse::<u64>().ok()).unwrap_or(4);
+            std::thread::sleep(std::time::Duration::from_secs(wait));
             let _ = p.send_event(UserEvent::Menu("selftest-report".into()));
         });
     }

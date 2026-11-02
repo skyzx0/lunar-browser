@@ -19,7 +19,16 @@ fn css_value(v: Option<&Value>, default: &str) -> String {
 }
 
 fn theme_css(settings: &Value) -> String {
-    let t = settings.get("theme").cloned().unwrap_or(Value::Null);
+    let mut t = settings.get("theme").cloned().unwrap_or(Value::Null);
+    let system = t.get("preset").and_then(Value::as_str) == Some("Match system");
+    if system {
+        if let Some(obj) = t.as_object_mut() {
+            for (k, v) in [("bg1", "#161719"), ("bg2", "#161719"), ("surface", "#1f2023"), ("text", "#e4e2dd"), ("muted", "#8b8984"), ("accent", "#d9a05b")] {
+                obj.insert(k.into(), Value::String(v.into()));
+            }
+            obj.insert("light".into(), Value::Bool(false));
+        }
+    }
     let get = |k: &str, d: &str| css_value(t.get(k), d);
     let custom_font = get("customFont", "");
     let font = match get("font", "system").as_str() {
@@ -44,16 +53,21 @@ fn theme_css(settings: &Value) -> String {
          :root{{--bg1:{bg1};--bg2:{bg2};--angle:{angle}deg;--surface:{surface};--text:{text};--muted:{muted};--accent:{accent};\
          --radius:{radius}px;--font:{font};--size:{size}px;--border:color-mix(in srgb,var(--text) 11%,transparent);color-scheme:{scheme}}}\
          html,body{{margin:0;min-height:100%;color:var(--text);font:var(--size)/1.55 var(--font);background:{background};-webkit-font-smoothing:antialiased}}\
-         a{{color:var(--accent)}}",
-        bg1 = get("bg1", "#141518"),
-        bg2 = get("bg2", "#141518"),
+         a{{color:var(--accent)}}{follow}",
+        bg1 = get("bg1", "#161719"),
+        bg2 = get("bg2", "#161719"),
         angle = get("angle", "180").parse::<f64>().unwrap_or(180.0),
-        surface = get("surface", "#1d1f23"),
-        text = get("text", "#e6e4df"),
+        surface = get("surface", "#1f2023"),
+        text = get("text", "#e4e2dd"),
         muted = get("muted", "#8b8984"),
-        accent = get("accent", "#e0a458"),
+        accent = get("accent", "#d9a05b"),
         radius = get("radius", "8").parse::<f64>().unwrap_or(8.0).clamp(0.0, 40.0),
         size = get("pageSize", "15").parse::<f64>().unwrap_or(15.0).clamp(11.0, 24.0),
+        follow = if system {
+            "@media (prefers-color-scheme: light){:root{--bg1:#f2f1ee;--bg2:#f2f1ee;--surface:#ffffff;--text:#1c1b19;--muted:#74716b;--accent:#2563c9;color-scheme:light}}"
+        } else {
+            ""
+        },
     )
 }
 

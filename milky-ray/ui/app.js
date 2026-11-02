@@ -10,14 +10,27 @@
 
   // ---------- themes ----------
   const PRESETS = {
-    Graphite: { bg1: '#141518', bg2: '#141518', surface: '#1d1f23', text: '#e6e4df', muted: '#8b8984', accent: '#e0a458', wallpaper: 'solid', font: 'system', radius: 8 },
-    Porcelain: { bg1: '#f3f2ef', bg2: '#f3f2ef', surface: '#ffffff', text: '#1d1c1a', muted: '#76736d', accent: '#2f6fdf', wallpaper: 'solid', font: 'system', radius: 8, light: true },
-    Midnight: { bg1: '#0e1116', bg2: '#0e1116', surface: '#161b22', text: '#d6dde6', muted: '#7d8794', accent: '#58a6ff', wallpaper: 'solid', font: 'system', radius: 6 },
-    Sand: { bg1: '#ece6db', bg2: '#ece6db', surface: '#f7f3ea', text: '#2b2620', muted: '#7c7264', accent: '#b4532a', wallpaper: 'solid', font: 'serif', radius: 4, light: true },
-    Moss: { bg1: '#121612', bg2: '#121612', surface: '#1a201a', text: '#dfe6d8', muted: '#8a9684', accent: '#a3c46c', wallpaper: 'solid', font: 'system', radius: 8 },
-    Ink: { bg1: '#0a0a0a', bg2: '#0a0a0a', surface: '#151515', text: '#f0f0f0', muted: '#8a8a8a', accent: '#f0f0f0', wallpaper: 'solid', font: 'mono', radius: 2 },
-    'Milky Way': { bg1: '#0f0d1a', bg2: '#251a40', surface: '#1b1829', text: '#ece8f6', muted: '#9a93b3', accent: '#c4b5fd', wallpaper: 'stars', font: 'system', radius: 10, angle: 160 },
-    'Lunar Terminal': { bg1: '#05070d', bg2: '#05070d', surface: '#0a0e18', text: '#c9d2e3', muted: '#5f6a85', accent: '#8fd8ff', wallpaper: 'solid', font: 'vt323', radius: 0 },
+    'Match system': { system: true },
+    Graphite: { bg1: '#161719', surface: '#1f2023', text: '#e4e2dd', muted: '#8b8984', accent: '#d9a05b', font: 'system', radius: 8 },
+    Porcelain: { bg1: '#f2f1ee', surface: '#ffffff', text: '#1c1b19', muted: '#74716b', accent: '#2563c9', font: 'system', radius: 8, light: true },
+    'Gruvbox Dark': { bg1: '#282828', surface: '#3c3836', text: '#ebdbb2', muted: '#a89984', accent: '#fe8019', font: 'mono', radius: 3 },
+    'Gruvbox Light': { bg1: '#fbf1c7', surface: '#f2e5bc', text: '#3c3836', muted: '#7c6f64', accent: '#af3a03', font: 'mono', radius: 3, light: true },
+    Nord: { bg1: '#2e3440', surface: '#3b4252', text: '#e5e9f0', muted: '#9099ab', accent: '#88c0d0', font: 'system', radius: 6 },
+    'Solarized Dark': { bg1: '#002b36', surface: '#073642', text: '#93a1a1', muted: '#657b83', accent: '#b58900', font: 'mono', radius: 4 },
+    'Solarized Light': { bg1: '#fdf6e3', surface: '#eee8d5', text: '#586e75', muted: '#93a1a1', accent: '#268bd2', font: 'mono', radius: 4, light: true },
+    'Rosé Pine': { bg1: '#191724', surface: '#1f1d2e', text: '#e0def4', muted: '#908caa', accent: '#ebbcba', font: 'rounded', radius: 10 },
+    'Rosé Pine Dawn': { bg1: '#faf4ed', surface: '#fffaf3', text: '#575279', muted: '#797593', accent: '#d7827e', font: 'rounded', radius: 10, light: true },
+    Everforest: { bg1: '#2d353b', surface: '#343f44', text: '#d3c6aa', muted: '#859289', accent: '#a7c080', font: 'system', radius: 6 },
+    Kanagawa: { bg1: '#1f1f28', surface: '#2a2a37', text: '#dcd7ba', muted: '#727169', accent: '#e6c384', font: 'serif', radius: 4 },
+    Monokai: { bg1: '#272822', surface: '#3e3d32', text: '#f8f8f2', muted: '#75715e', accent: '#a6e22e', font: 'mono', radius: 2 },
+    Zenburn: { bg1: '#3f3f3f', surface: '#4f4f4f', text: '#dcdccc', muted: '#9f9f8f', accent: '#f0dfaf', font: 'mono', radius: 0 },
+    'Lunar Terminal': { bg1: '#05070d', surface: '#0a0e18', text: '#c9d2e3', muted: '#5f6a85', accent: '#8fd8ff', font: 'vt323', radius: 0 },
+  };
+  const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
+  const resolvePreset = (name) => {
+    const p = PRESETS[name];
+    if (p && p.system) return systemDark.matches ? PRESETS.Graphite : PRESETS.Porcelain;
+    return p;
   };
   const FONTS = {
     system: 'Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
@@ -27,7 +40,11 @@
     vt323: '"VT323", ui-monospace, monospace',
   };
   const DEFAULTS = {
-    theme: { preset: 'Graphite', ...PRESETS.Graphite, angle: 180, blur: 0, size: 13, pageSize: 15, image: '', light: false, windowOpacity: 100, pageOpacity: 100, customFont: '' },
+    theme: {
+      preset: 'Match system', ...PRESETS.Graphite, bg2: PRESETS.Graphite.bg1, wallpaper: 'solid', angle: 180, size: 13, pageSize: 15, image: '', light: false, customFont: '',
+      windowOpacity: 100, tabsTint: 0, toolbarTint: 0, sidebarTint: 0, frameOpacity: 100, panelOpacity: 97,
+      blur: 0, backdrop: 'off', pageOpacity: 100, pageBackground: 'normal',
+    },
     layout: {
       tabs: 'top', sideRight: false, sidebarHidden: false, tabStyle: 'rounded', toolbar: 'top', density: 'normal',
       bookmarksBar: false, statusBar: false, edge: false, addressCenter: false,
@@ -75,26 +92,32 @@
   };
 
   function applyTheme() {
-    const t = settings.theme;
+    const live = resolvePreset(settings.theme.preset);
+    const t = live && PRESETS[settings.theme.preset].system ? { ...settings.theme, ...live, bg2: live.bg1, light: !!live.light } : settings.theme;
     const l = settings.layout;
     const root = document.documentElement.style;
     for (const k of ['bg1', 'bg2', 'surface', 'text', 'muted', 'accent']) root.setProperty('--' + k, t[k]);
+    const pct = (v, d) => Math.max(0, Math.min(100, v ?? d));
+    root.setProperty('--window-opacity', pct(t.windowOpacity, 100) / 100);
+    root.setProperty('--tabs-tint', pct(t.tabsTint, 0) + '%');
+    root.setProperty('--toolbar-tint', pct(t.toolbarTint, 0) + '%');
+    root.setProperty('--sidebar-tint', pct(t.sidebarTint, 0) + '%');
+    root.setProperty('--frame-alpha', pct(t.frameOpacity, 100) + '%');
+    root.setProperty('--panel-alpha', pct(t.panelOpacity, 97) + '%');
     root.setProperty('--angle', (t.angle ?? 180) + 'deg');
     root.setProperty('--radius', (t.radius ?? 8) + 'px');
     root.setProperty('--blur', (t.blur ?? 0) + 'px');
     root.setProperty('--size', (t.size ?? 13) + 'px');
-    root.setProperty('--window-alpha', (t.windowOpacity ?? 100) + '%');
     root.setProperty('--font', t.customFont ? `${t.customFont}, ${FONTS.system}` : (FONTS[t.font] || FONTS.system));
     root.setProperty('--pad', { compact: '5px', normal: '8px', roomy: '12px' }[l.density] || '8px');
     root.setProperty('--wallpaper',
-      t.wallpaper === 'gradient' || t.wallpaper === 'stars'
-        ? 'linear-gradient(var(--angle), color-mix(in srgb, var(--bg1) var(--window-alpha), transparent), color-mix(in srgb, var(--bg2) var(--window-alpha), transparent))'
-        : t.wallpaper === 'image' && t.image ? `url("${t.image}") center / cover no-repeat, var(--chrome)` : 'var(--chrome)');
+      t.wallpaper === 'gradient' || t.wallpaper === 'stars' ? 'linear-gradient(var(--angle), var(--bg1), var(--bg2))'
+        : t.wallpaper === 'image' && t.image ? `url("${t.image}") center / cover no-repeat, var(--bg1)` : 'var(--bg1)');
     const b = document.body;
     b.className = '';
     b.classList.add('platform-' + boot.platform, 'tabs-' + l.tabs, 'tab-' + l.tabStyle);
     const flags = {
-      stars: t.wallpaper === 'stars', light: t.light, glass: (t.blur ?? 0) > 0,
+      stars: t.wallpaper === 'stars', light: t.light, glass: (t.blur ?? 0) > 0, frameless: pct(t.frameOpacity, 100) === 0,
       'toolbar-bottom': l.toolbar === 'bottom', right: l.sideRight, 'sidebar-hidden': l.sidebarHidden,
       'show-bookmarks': l.bookmarksBar, 'show-status': l.statusBar, edge: l.edge, 'address-center': l.addressCenter,
     };
@@ -116,6 +139,7 @@
     if (panel) placePanel();
   }
   new ResizeObserver(reportLayout).observe($('#content'));
+  systemDark.addEventListener('change', () => { if (PRESETS[settings.theme.preset]?.system) { applyTheme(); send('saveSettings', { settings }); } });
   window.addEventListener('resize', reportLayout);
 
   // ---------- tabs ----------
@@ -178,6 +202,7 @@
     lock.innerHTML = `<use href="#i-${kind}"/>`;
     lock.setAttribute('class', 'i lock' + (kind === 'warn' ? ' insecure' : ''));
     $('#reload').innerHTML = icon(tab && tab.loading ? 'stop' : 'reload');
+    $('#reload').dataset.cmd = tab && tab.loading ? 'stop' : 'reload';
     $('#reload').title = tab && tab.loading ? 'Stop' : 'Reload';
     const starred = tab && tab.url && settings.bookmarks.some((b) => b.url === tab.url);
     $('#star').classList.toggle('on', !!starred);
@@ -265,19 +290,34 @@
     const t = settings.theme;
     if (panel === 'appearance') {
       body.innerHTML = `
-        <div class="group"><h3>Theme</h3><div class="presets">${Object.entries(PRESETS).map(([name, p]) => `
-          <button class="preset ${t.preset === name ? 'on' : ''}" data-preset="${esc(name)}">
-            <div class="swatch"><span style="background:${p.bg1}"></span><span style="background:${p.surface}"></span><span style="background:${p.accent}"></span></div>
-            <span class="name">${esc(name)}</span></button>`).join('')}</div></div>
+        <div class="group"><h3>Theme</h3>
+          <p>Classic color schemes, each with the colors its author chose. Any of them can be changed below.</p>
+          <div class="presets">${Object.entries(PRESETS).map(([name, p]) => `
+          <button class="preset ${t.preset === name ? 'on' : ''}" data-preset="${esc(name)}" style="${p.system ? '' : `--p-bg:${p.bg1};--p-surface:${p.surface};--p-text:${p.text};--p-muted:${p.muted};--p-accent:${p.accent};--p-radius:${p.radius}px;--p-font:${FONTS[p.font]}`}">
+            <div class="mini${p.system ? ' split' : ''}"><div class="mini-tabs"><i class="on"></i><i></i><i></i></div><div class="mini-bar"></div><div class="mini-page"><b></b><s></s><s></s><s class="link"></s></div></div>
+            <span class="name">${esc(name)}<em>${p.system ? 'auto' : 'Aa'}</em></span></button>`).join('')}</div></div>
+        <div class="group"><h3>Transparency</h3>
+          <p>Every part of the window can be see-through. At 0 a part shows whatever is behind it: the window background, or your desktop.</p>
+          <div class="btn-row"><button class="btn" id="see-through">Make everything see-through</button><button class="btn" id="solid">Make everything solid</button></div>
+          <div class="subhead">Window</div>
+          ${range('theme.windowOpacity', 'Window background', 0, 100, 1, '%', 'The color, gradient or picture behind everything')}
+          ${seg('theme.backdrop', 'Blur the desktop behind', [['off', 'Off'], ['frosted', 'Frosted'], ['smoked', 'Smoked']])}
+          ${boot.platform === 'linux' ? '<p class="note">Desktop blur isn’t available on Linux; the window can still be see-through.</p>' : ''}
+          <div class="subhead">Parts of the window</div>
+          ${range('theme.tabsTint', 'Tab bar', 0, 100, 1, '%')}
+          ${range('theme.toolbarTint', 'Toolbar and bookmarks', 0, 100, 1, '%')}
+          ${range('theme.sidebarTint', 'Sidebar', 0, 100, 1, '%')}
+          ${range('theme.frameOpacity', 'Frame behind pages', 0, 100, 1, '%')}
+          ${range('theme.panelOpacity', 'Panels (like this one)', 30, 100, 1, '%')}
+          ${range('theme.blur', 'Blur behind bars and panels', 0, 40, 1, 'px')}
+          <div class="subhead">Web pages</div>
+          ${seg('theme.pageBackground', 'Page backgrounds', [['normal', 'Normal'], ['transparent', 'Transparent'], ['all', 'Everything clear']])}
+          <p class="note">Transparent removes a page's own background color; Everything clear removes every background on the page, so only text and pictures stay. Text keeps full strength either way.</p>
+          ${range('theme.pageOpacity', 'Whole page opacity', 20, 100, 1, '%', 'Fades text and pictures too')}</div>
         <div class="group"><h3>Color</h3>
           ${color('theme.bg1', 'Window')}${color('theme.surface', 'Surfaces')}${color('theme.accent', 'Accent')}
           ${color('theme.text', 'Text')}${color('theme.muted', 'Secondary text')}
           ${sw('theme.light', 'Light appearance', 'Scrollbars and form controls in light colors')}</div>
-        <div class="group"><h3>Transparency</h3>
-          <p>Lower these to see your desktop through Milky Ray. Pages that paint their own background stay solid at 100%.</p>
-          ${range('theme.windowOpacity', 'Window', 0, 100, 1, '%')}
-          ${range('theme.pageOpacity', 'Pages', 20, 100, 1, '%', 'Makes whole web pages see-through')}
-          ${range('theme.blur', 'Blur behind bars', 0, 40, 1, 'px')}</div>
         <div class="group"><h3>Background</h3>
           ${seg('theme.wallpaper', 'Style', [['solid', 'Solid'], ['gradient', 'Gradient'], ['stars', 'Stars'], ['image', 'Picture']])}
           ${color('theme.bg2', 'Gradient end')}
@@ -345,7 +385,8 @@
   }
 
   function changed(key) {
-    if (key.startsWith('theme.') && !['theme.preset', 'theme.windowOpacity', 'theme.pageOpacity', 'theme.blur'].includes(key)) settings.theme.preset = 'Custom';
+    const looks = ['theme.bg1', 'theme.bg2', 'theme.surface', 'theme.text', 'theme.muted', 'theme.accent', 'theme.light', 'theme.font', 'theme.radius'];
+    if (looks.includes(key)) settings.theme.preset = 'Custom';
     applyTheme();
     renderChrome();
     save();
@@ -375,7 +416,8 @@
     }));
     $$('[data-preset]', body).forEach((b) => b.addEventListener('click', () => {
       const p = PRESETS[b.dataset.preset];
-      settings.theme = { ...settings.theme, light: false, angle: 180, ...p, preset: b.dataset.preset };
+      const colors = p.system ? {} : { ...p, bg2: p.bg1, light: !!p.light };
+      settings.theme = { ...settings.theme, ...colors, preset: b.dataset.preset };
       applyTheme(); renderChrome(); save(); renderPanel();
     }));
     const file = $('#wallpaper-file', body);
@@ -403,6 +445,14 @@
     });
     on('reset', () => {
       settings = merge(settings, { theme: DEFAULTS.theme, layout: DEFAULTS.layout, uiCss: '', newTabCss: '' });
+      applyTheme(); renderChrome(); save(); renderPanel();
+    });
+    on('see-through', () => {
+      Object.assign(settings.theme, { windowOpacity: 0, tabsTint: 0, toolbarTint: 0, sidebarTint: 0, frameOpacity: 0, panelOpacity: 70, blur: 12, backdrop: boot.platform === 'linux' ? 'off' : 'frosted', pageBackground: 'all' });
+      applyTheme(); renderChrome(); save(); renderPanel(); toast('Everything is see-through');
+    });
+    on('solid', () => {
+      Object.assign(settings.theme, { windowOpacity: 100, tabsTint: 0, toolbarTint: 0, sidebarTint: 0, frameOpacity: 100, panelOpacity: 97, blur: 0, backdrop: 'off', pageBackground: 'normal', pageOpacity: 100 });
       applyTheme(); renderChrome(); save(); renderPanel();
     });
     on('raw-apply', () => {

@@ -2,6 +2,11 @@ name: Build Lunar Browser
 
 on:
   workflow_dispatch:
+    inputs:
+      crawl_minutes:
+        description: "Minutes to grow Lunar Search's index (it starts from the last release's)"
+        required: false
+        default: "170"
 
 permissions:
   contents: write
@@ -86,7 +91,7 @@ jobs:
         env:
           XDG_DATA_HOME: ${{ github.workspace }}/data
         run: |
-          target/release/lunar-browser --crawl 30000 170
+          target/release/lunar-browser --crawl 30000 "${{ github.event.inputs.crawl_minutes || '170' }}"
           mkdir -p out
           cp data/lunar-browser/search-index.gz out/lunar-search-index.gz
           ls -lh out

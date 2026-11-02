@@ -66,6 +66,16 @@ impl Store {
         path.iter().try_fold(&*v, |v, k| v.get(*k)).and_then(Value::as_f64).unwrap_or(default)
     }
 
+    pub fn get_bool_at(&self, path: &[&str]) -> bool {
+        let v = self.values.read().unwrap();
+        path.iter().try_fold(&*v, |v, k| v.get(*k)).and_then(Value::as_bool).unwrap_or(false)
+    }
+
+    pub fn get_str_at(&self, path: &[&str]) -> String {
+        let v = self.values.read().unwrap();
+        path.iter().try_fold(&*v, |v, k| v.get(*k)).and_then(Value::as_str).unwrap_or("").trim().to_string()
+    }
+
     pub fn get_str(&self, key: &str) -> String {
         self.values.read().unwrap().get(key).and_then(Value::as_str).unwrap_or("").trim().to_string()
     }

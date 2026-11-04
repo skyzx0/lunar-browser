@@ -5,6 +5,7 @@ mod store;
 
 use std::borrow::Cow;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use lunar_browser::search::Engine;
 use muda::{accelerator::Accelerator, Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
@@ -30,7 +31,8 @@ enum UserEvent {
 
 struct Tab {
     id: u64,
-    view: WebView,
+    view: Option<WebView>,
+    seen: Instant,
     title: String,
     url: String,
     loading: bool,
@@ -233,8 +235,10 @@ impl App {
         let _ = self.ui.set_bounds(Self::rect(0.0, 0.0, w, h));
         let (x, y, cw, ch) = self.content;
         for (i, tab) in self.tabs.iter().enumerate() {
-            let _ = tab.view.set_bounds(Self::rect(x, y, cw, ch));
-            let _ = tab.view.set_visible(i == self.active && !self.overlay);
+            if let Some(view) = &tab.view {
+                let _ = view.set_bounds(Self::rect(x, y, cw, ch));
+                let _ = view.set_visible(i == self.active && !self.overlay);
+            }
         }
     }
 
@@ -265,9 +269,74 @@ impl App {
         let id = self.next_id;
         self.next_id += 1;
         let url = url.unwrap_or_else(|| self.store.home_url(&internal("newtab")));
+        let zoom = (self.store.get_f64(&["defaultZoom"], 100.0) / 100.0).clamp(0.3, 3.0);
+        match self.build_view(id, &url, zoom) {
+            Ok(view) => {
+                self.tabs.push(Tab { id, view: Some(view), seen: Instant::now(), title: "New tab".into(), url, loading: true, zoom });
+                self.active = self.tabs.len() - 1;
+                self.save_memory();
+                self.layout();
+                self.send_state();
+                if self.tabs[self.active].url.contains("newtab") {
+                    self.focus_address();
+                } else {
+                    self.focus_active();
+                }
+            }
+            Err(e) => self.toast(&format!("couldn't open a tab: {e}")),
+        }
+    }
+
+    fn focus_active(&self) {
+        if let Some(v) = self.active_view() {
+            let _ = v.focus();
+        }
+    }
+
+    fn wake(&mut self, index: usize) {
+        let Some(tab) = self.tabs.get(index) else { return };
+        if tab.view.is_some() {
+            return;
+        }
+        let (id, url, zoom) = (tab.id, tab.url.clone(), tab.zoom);
+        match self.build_view(id, &url, zoom) {
+            Ok(view) => {
+                let tab = &mut self.tabs[index];
+                tab.view = Some(view);
+                tab.loading = true;
+            }
+            Err(e) => self.toast(&format!("couldn't wake the tab: {e}")),
+        }
+    }
+
+    fn save_memory(&mut self) {
+        if let Some(tab) = self.tabs.get_mut(self.active) {
+            tab.seen = Instant::now();
+        }
+        if !self.store.get_bool("memorySaver", true) {
+            return;
+        }
+        let keep = self.store.get_f64(&["liveTabs"], 4.0).max(1.0) as usize;
+        let idle = Duration::from_secs_f64(self.store.get_f64(&["sleepMinutes"], 10.0).max(1.0) * 60.0);
+        let mut live: Vec<usize> = (0..self.tabs.len()).filter(|&i| i != self.active && self.tabs[i].view.is_some()).collect();
+        live.sort_by_key(|&i| std::cmp::Reverse(self.tabs[i].seen));
+        let mut changed = false;
+        for (rank, i) in live.into_iter().enumerate() {
+            let tab = &mut self.tabs[i];
+            if rank + 1 >= keep || tab.seen.elapsed() > idle {
+                tab.view = None;
+                tab.loading = false;
+                changed = true;
+            }
+        }
+        if changed {
+            self.send_state();
+        }
+    }
+
+    fn build_view(&mut self, id: u64, url: &str, zoom: f64) -> wry::Result<WebView> {
         let private = self.store.get_bool("private", false);
         let user_agent = self.store.get_str("userAgent");
-        let zoom = (self.store.get_f64(&["defaultZoom"], 100.0) / 100.0).clamp(0.3, 3.0);
         let script = page_script(&self.store);
         let https_only = self.store.get_bool("httpsOnly", true);
         let search = self.search.clone();
@@ -276,7 +345,7 @@ impl App {
         let (p1, p2, p3, p4, p5) = (self.proxy.clone(), self.proxy.clone(), self.proxy.clone(), self.proxy.clone(), self.proxy.clone());
         let mut builder = WebViewBuilder::new_with_web_context(&mut self.context)
             .with_bounds(Self::rect(self.content.0, self.content.1, self.content.2, self.content.3))
-            .with_url(&url)
+            .with_url(url)
             .with_transparent(true)
             .with_initialization_script(script)
             .with_incognito(private)
@@ -335,26 +404,13 @@ impl App {
             builder = builder.with_user_agent(user_agent);
         }
         #[cfg(not(target_os = "linux"))]
-        let built = build_child(builder, &self.window);
+        let view = build_child(builder, &self.window)?;
         #[cfg(target_os = "linux")]
-        let built = build_child(builder, &self.fixed);
-        match built {
-            Ok(view) => {
-                if (zoom - 1.0).abs() > 0.01 {
-                    let _ = view.zoom(zoom);
-                }
-                self.tabs.push(Tab { id, view, title: "New tab".into(), url, loading: true, zoom });
-                self.active = self.tabs.len() - 1;
-                self.layout();
-                self.send_state();
-                if self.tabs[self.active].url.contains("newtab") {
-                    self.focus_address();
-                } else {
-                    let _ = self.tabs[self.active].view.focus();
-                }
-            }
-            Err(e) => self.toast(&format!("couldn't open a tab: {e}")),
+        let view = build_child(builder, &self.fixed)?;
+        if (zoom - 1.0).abs() > 0.01 {
+            let _ = view.zoom(zoom);
         }
+        Ok(view)
     }
 
     fn close_tab(&mut self, index: usize) {
@@ -376,9 +432,11 @@ impl App {
     fn select(&mut self, index: usize) {
         if index < self.tabs.len() {
             self.active = index;
+            self.wake(index);
+            self.save_memory();
             self.layout();
             self.send_state();
-            let _ = self.tabs[index].view.focus();
+            self.focus_active();
         }
     }
 
@@ -388,14 +446,14 @@ impl App {
 
     fn go(&mut self, text: &str) {
         let Some(url) = self.target_for(text) else { return };
-        if let Some(tab) = self.tabs.get(self.active) {
-            let _ = tab.view.load_url(&url);
-            let _ = tab.view.focus();
+        if let Some(v) = self.active_view() {
+            let _ = v.load_url(&url);
+            let _ = v.focus();
         }
     }
 
     fn active_view(&self) -> Option<&WebView> {
-        self.tabs.get(self.active).map(|t| &t.view)
+        self.tabs.get(self.active).and_then(|t| t.view.as_ref())
     }
 
     fn zoom(&mut self, change: Option<f64>) {
@@ -404,7 +462,9 @@ impl App {
                 Some(step) => (tab.zoom + step).clamp(0.3, 3.0),
                 None => 1.0,
             };
-            let _ = tab.view.zoom(tab.zoom);
+            if let Some(v) = &tab.view {
+                let _ = v.zoom(tab.zoom);
+            }
         }
     }
 
@@ -421,7 +481,7 @@ impl App {
         let tabs: Vec<Value> = self
             .tabs
             .iter()
-            .map(|t| json!({ "id": t.id, "title": t.title, "url": friendly(&t.url), "loading": t.loading, "secure": t.url.starts_with("https://") || is_internal(&t.url) }))
+            .map(|t| json!({ "id": t.id, "title": t.title, "url": friendly(&t.url), "loading": t.loading, "secure": t.url.starts_with("https://") || is_internal(&t.url), "asleep": t.view.is_none() }))
             .collect();
         let state = json!({
             "tabs": tabs,
@@ -538,10 +598,11 @@ impl App {
                     self.search.set_crawl(self.store.get_bool("crawl", true));
                     let (css, opacity, mode) = page_style(&self.store);
                     let call = format!("window.__milkyApply && window.__milkyApply({css}, {opacity}, {mode})");
-                    for tab in &self.tabs {
-                        let _ = tab.view.evaluate_script(&call);
+                    for view in self.tabs.iter().filter_map(|t| t.view.as_ref()) {
+                        let _ = view.evaluate_script(&call);
                     }
                     self.apply_backdrop();
+                    self.save_memory();
                 }
             }
             "uiFiles" => match store::ui_dir() {
@@ -601,8 +662,8 @@ impl App {
             }
             UserEvent::OpenTab(url) => self.new_tab(Some(url)),
             UserEvent::Navigate(id, url) => {
-                if let Some(tab) = self.tabs.iter().find(|t| t.id == id) {
-                    let _ = tab.view.load_url(&url);
+                if let Some(view) = self.tabs.iter().find(|t| t.id == id).and_then(|t| t.view.as_ref()) {
+                    let _ = view.load_url(&url);
                 }
             }
             UserEvent::Downloaded(name) => self.toast(&format!("downloading {name} to Downloads")),
@@ -640,11 +701,11 @@ impl App {
                 }
                 "selftest-report" => {
                     for t in &self.tabs {
-                        eprintln!("tab {} | loading={} | {} | {}", t.id, t.loading, friendly(&t.url), t.title);
+                        eprintln!("tab {} | loading={} | asleep={} | {} | {}", t.id, t.loading, t.view.is_none(), friendly(&t.url), t.title);
                     }
                     eprintln!("lunar search pages: {}", self.search.pages());
-                    if let Some(tab) = self.tabs.iter().find(|t| t.url.contains("example.com")) {
-                        let _ = tab.view.evaluate_script_with_callback(
+                    if let Some(view) = self.tabs.iter().find(|t| t.url.contains("example.com")).and_then(|t| t.view.as_ref()) {
+                        let _ = view.evaluate_script_with_callback(
                             "JSON.stringify({ style: (document.getElementById('__milky_style') || {}).textContent, outline: getComputedStyle(document.body).outlineColor, bodyBackground: getComputedStyle(document.body).backgroundColor })",
                             |result| {
                                 eprintln!("page check: {result}");
@@ -853,6 +914,7 @@ fn main() -> wry::Result<()> {
         });
     }
     let mut last_pages = 0;
+    let mut last_check = Instant::now();
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::WaitUntil(std::time::Instant::now() + std::time::Duration::from_secs(2));
         match event {
@@ -863,6 +925,10 @@ fn main() -> wry::Result<()> {
                 *control_flow = ControlFlow::Exit;
             }
             Event::NewEvents(tao::event::StartCause::ResumeTimeReached { .. }) => {
+                if last_check.elapsed() > Duration::from_secs(30) {
+                    last_check = Instant::now();
+                    app.save_memory();
+                }
                 let pages = app.search.pages();
                 if pages != last_pages {
                     last_pages = pages;

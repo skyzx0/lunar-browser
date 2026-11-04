@@ -15,6 +15,26 @@ pub struct Response {
     pub status: u16,
     pub headers: Vec<(String, String)>,
     pub body: Vec<u8>,
+    pub keep_alive: bool,
+}
+
+#[derive(Default)]
+pub struct Pool {
+    conns: Mutex<HashMap<String, Vec<Conn>>>,
+}
+
+impl Pool {
+    fn take(&self, key: &str) -> Option<Conn> {
+        self.conns.lock().unwrap().get_mut(key).and_then(Vec::pop)
+    }
+
+    fn give(&self, key: String, conn: Conn) {
+        let mut conns = self.conns.lock().unwrap();
+        let list = conns.entry(key).or_default();
+        if list.len() < 2 {
+            list.push(conn);
+        }
+    }
 }
 
 impl Response {
@@ -128,7 +148,10 @@ pub fn read_response(conn: &mut Conn, max: usize) -> Result<Response, String> {
 
     let chunked = get("transfer-encoding").map_or(false, |v| v.to_ascii_lowercase().contains("chunked"));
     let length: Option<usize> = get("content-length").and_then(|v| v.parse().ok());
-    if status == 204 || status == 304 || (100..200).contains(&status) {
+    let no_body = status == 204 || status == 304 || (100..200).contains(&status);
+    let keep_alive = (chunked || length.is_some() || no_body)
+        && !get("connection").map_or(false, |v| v.to_ascii_lowercase().contains("close"));
+    if no_body {
         body.clear();
     } else if chunked {
         body = read_chunked(conn, body, max)?;
@@ -163,7 +186,7 @@ pub fn read_response(conn: &mut Conn, max: usize) -> Result<Response, String> {
             .or_else(|_| inflate(flate2::read::DeflateDecoder::new(&body[..]), max))?,
         _ => body,
     };
-    Ok(Response { url: Url::parse("about:blank").unwrap(), status, headers, body })
+    Ok(Response { url: Url::parse("about:blank").unwrap(), status, headers, body, keep_alive })
 }
 
 fn inflate(reader: impl Read, max: usize) -> Result<Vec<u8>, String> {
@@ -213,9 +236,21 @@ fn read_chunked(conn: &mut Conn, mut pending: Vec<u8>, max: usize) -> Result<Vec
     }
 }
 
-fn send(req: &Request, jar: &Mutex<CookieJar>, resolver: &Resolver, agent: &str, max: usize) -> Result<Response, String> {
+fn send(req: &Request, jar: &Mutex<CookieJar>, resolver: &Resolver, agent: &str, max: usize, pool: Option<&Pool>) -> Result<Response, String> {
     let url = &req.url;
-    let mut conn = open(url, resolver)?;
+    let key = format!("{}://{}:{}", url.scheme(), url.host_str().unwrap_or(""), url.port_or_known_default().unwrap_or(0));
+    if let Some(conn) = pool.and_then(|p| p.take(&key)) {
+        // A kept-alive connection the server may have closed meanwhile: on failure, retry on a new one.
+        if let Ok(response) = exchange(req, jar, agent, max, conn, pool, &key) {
+            return Ok(response);
+        }
+    }
+    let conn = open(url, resolver)?;
+    exchange(req, jar, agent, max, conn, pool, &key)
+}
+
+fn exchange(req: &Request, jar: &Mutex<CookieJar>, agent: &str, max: usize, mut conn: Conn, pool: Option<&Pool>, key: &str) -> Result<Response, String> {
+    let url = &req.url;
     let host = match url.port() {
         Some(p) => format!("{}:{p}", url.host_str().unwrap_or("")),
         None => url.host_str().unwrap_or("").to_string(),
@@ -229,8 +264,9 @@ fn send(req: &Request, jar: &Mutex<CookieJar>, resolver: &Resolver, agent: &str,
         "{} {path} HTTP/1.1\r\nHost: {host}\r\nUser-Agent: {agent}\r\n\
          Accept: text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.1\r\n\
          Accept-Language: en-US,en;q=0.8\r\nAccept-Encoding: gzip, deflate\r\n\
-         Connection: close\r\nDNT: 1\r\nSec-GPC: 1\r\nUpgrade-Insecure-Requests: 1\r\n",
-        req.method
+         Connection: {}\r\nDNT: 1\r\nSec-GPC: 1\r\nUpgrade-Insecure-Requests: 1\r\n",
+        req.method,
+        if pool.is_some() { "keep-alive" } else { "close" }
     );
     if let Some(cookies) = jar.lock().unwrap().header_for(url) {
         head.push_str(&format!("Cookie: {cookies}\r\n"));
@@ -249,6 +285,9 @@ fn send(req: &Request, jar: &Mutex<CookieJar>, resolver: &Resolver, agent: &str,
     conn.flush().ok();
     let mut response = read_response(&mut conn, max)?;
     response.url = url.clone();
+    if let (Some(pool), true) = (pool, response.keep_alive) {
+        pool.give(key.to_string(), conn);
+    }
     let mut jar = jar.lock().unwrap();
     for (k, v) in &response.headers {
         if k.eq_ignore_ascii_case("set-cookie") {
@@ -266,10 +305,14 @@ pub fn fetch_as(req: Request, jar: &Mutex<CookieJar>, resolver: &Resolver, agent
     fetch_limit(req, jar, resolver, agent, MAX_BODY)
 }
 
-pub fn fetch_limit(mut req: Request, jar: &Mutex<CookieJar>, resolver: &Resolver, agent: &str, max: usize) -> Result<Response, String> {
+pub fn fetch_limit(req: Request, jar: &Mutex<CookieJar>, resolver: &Resolver, agent: &str, max: usize) -> Result<Response, String> {
+    fetch_pooled(req, jar, resolver, agent, max, None)
+}
+
+pub fn fetch_pooled(mut req: Request, jar: &Mutex<CookieJar>, resolver: &Resolver, agent: &str, max: usize, pool: Option<&Pool>) -> Result<Response, String> {
     req.url = upgrade(req.url);
     for _ in 0..=MAX_REDIRECTS {
-        let response = send(&req, jar, resolver, agent, max)?;
+        let response = send(&req, jar, resolver, agent, max, pool)?;
         if matches!(response.status, 301 | 302 | 303 | 307 | 308) {
             let location = response.header("location").ok_or("redirect without a location")?;
             let next = req.url.join(location).map_err(|e| format!("bad redirect: {e}"))?;

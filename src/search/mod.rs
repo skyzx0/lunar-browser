@@ -12,7 +12,7 @@ use url::Url;
 use crawl::{Crawler, Frontier, Step, SEEDS};
 use index::{Hit, Index};
 
-const WORKERS: usize = 12;
+const WORKERS: usize = 32;
 const STARTER_INDEX: &str = "https://github.com/skyzx0/lunar-browser/releases/latest/download/lunar-search-index.gz";
 const SAVE_EVERY: usize = 50;
 
@@ -24,6 +24,7 @@ pub struct Engine {
     crawl: AtomicBool,
     active: AtomicUsize,
     unsaved: AtomicUsize,
+    crawler: Crawler,
 }
 
 pub struct Results {
@@ -44,6 +45,7 @@ impl Engine {
             crawl: AtomicBool::new(crawl),
             active: AtomicUsize::new(0),
             unsaved: AtomicUsize::new(0),
+            crawler: Crawler::new(),
         }
     }
 
@@ -69,6 +71,7 @@ impl Engine {
     fn load(&self) {
         if let Some(path) = &self.path {
             *self.index.write().unwrap() = Index::load(path);
+            let _ = std::fs::remove_file(path.with_file_name("search-index-starter.texts"));
             let marker = path.with_extension("starter");
             if self.crawl.load(Ordering::SeqCst) && !marker.exists() && self.fetch_starter(path) {
                 let _ = std::fs::write(marker, STARTER_INDEX);
@@ -106,7 +109,7 @@ impl Engine {
         if let Some(dir) = path.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
-        let tmp = path.with_extension("download");
+        let tmp = path.with_file_name("search-index-starter.download");
         if std::fs::write(&tmp, &response.body).is_err() {
             return false;
         }
@@ -116,9 +119,11 @@ impl Engine {
             return false;
         }
         let mut index = self.index.write().unwrap();
-        for page in index.pages() {
-            starter.add(page.clone());
+        let local = std::mem::take(&mut *index);
+        for page in local.into_pages() {
+            starter.add(page);
         }
+        starter.compact();
         *index = starter;
         drop(index);
         self.save();
@@ -126,7 +131,7 @@ impl Engine {
     }
 
     fn work(&self) {
-        let crawler = Crawler::new();
+        let crawler = &self.crawler;
         loop {
             if !self.crawl.load(Ordering::SeqCst) {
                 std::thread::sleep(Duration::from_millis(500));

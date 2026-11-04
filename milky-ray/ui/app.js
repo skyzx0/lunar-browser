@@ -64,6 +64,9 @@
     httpsOnly: true,
     private: false,
     crawl: true,
+    memorySaver: true,
+    liveTabs: 4,
+    sleepMinutes: 10,
   };
   const merge = (base, over) => {
     const out = Array.isArray(base) ? [...base] : { ...base };
@@ -119,6 +122,7 @@
     const flags = {
       stars: t.wallpaper === 'stars', light: t.light, glass: (t.blur ?? 0) > 0, frameless: pct(t.frameOpacity, 100) === 0,
       'toolbar-bottom': l.toolbar === 'bottom', right: l.sideRight, 'sidebar-hidden': l.sidebarHidden,
+      'see-through': pct(t.windowOpacity, 100) < 40 && Math.max(pct(t.tabsTint, 0), pct(t.toolbarTint, 0)) < 40,
       'show-bookmarks': l.bookmarksBar, 'show-status': l.statusBar, edge: l.edge, 'address-center': l.addressCenter,
     };
     for (const [name, on] of Object.entries(flags)) if (on) b.classList.add(name);
@@ -145,7 +149,7 @@
   // ---------- tabs ----------
   function tabEl(tab) {
     const el = document.createElement('div');
-    el.className = 'tab' + (tab.id === state.active ? ' active' : '') + (tab.loading ? ' loading' : '');
+    el.className = 'tab' + (tab.id === state.active ? ' active' : '') + (tab.loading ? ' loading' : '') + (tab.asleep ? ' asleep' : '');
     el.draggable = true;
     el.title = tab.title || tab.url;
     el.innerHTML = `<span class="mark"></span><span class="title">${esc(tab.title || tab.url || 'New tab')}</span><button class="close" title="Close tab">${icon('close')}</button>`;
@@ -360,6 +364,10 @@
           ${text('homePage', 'Home page', 'New tab page')}
           ${range('defaultZoom', 'Default zoom', 50, 200, 5, '%', 'For new tabs')}
           ${text('userAgent', 'User agent', 'Your system browser’s', 'For new tabs. Leave empty for the default')}</div>
+        <div class="group"><h3>Memory</h3>
+          ${sw('memorySaver', 'Memory saver', 'Puts background tabs to sleep. They reload when you click them')}
+          ${range('liveTabs', 'Tabs kept awake', 1, 12, 1, '', 'Including the one you’re looking at')}
+          ${range('sleepMinutes', 'Sleep tabs unused for', 1, 120, 1, ' min')}</div>
         <div class="group"><h3>Privacy and security</h3>
           ${sw('httpsOnly', 'HTTPS only', 'Upgrade http:// pages to https://')}
           ${sw('private', 'Private tabs', 'New tabs keep no cookies or history after they close')}

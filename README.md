@@ -12,8 +12,8 @@ terminal font. For macOS, Windows and Linux.
     src/engine/layout.rs    lays a page out on a character grid
     src/net/http.rs         HTTP/1.1 client: HTTPS only, memory-only cookies
     src/net/dns.rs          DNS over HTTPS (Cloudflare, Quad9), no plaintext DNS
-    src/search/crawl.rs     Lunar Search's crawler: robots.txt, one request/s per site
-    src/search/index.rs     Lunar Search's index: BM25 ranking, snippets
+    src/search/crawl.rs     Lunar Search's crawler: robots.txt, one request/s per site, 32 sites at once
+    src/search/index.rs     Lunar Search's index: BM25 ranking, snippets, packed to stay small
     src/app.rs              the window: tabs, toolbar, settings bar, page view
     src/pages.rs            Lunar's own pages (new tab, errors)
     milky-ray/              Lunar Browser Milky Ray (see below)
@@ -46,6 +46,12 @@ restyled:
   see-through web pages: transparent page backgrounds, everything clear
   with only text and pictures left, or the whole page faded. One button
   makes everything see-through, another makes it solid again
+  When it's see-through, the bars keep a light backing and halo so text and
+  buttons stay readable on any desktop
+- **Memory saver**: background tabs go to sleep and reload when you click
+  them. You choose how many stay awake (4 by default) and after how many
+  idle minutes the rest sleep. With two tabs open, Milky Ray uses about
+  500 MB in all
 - **Shape**: corner radius, density, pages framed or edge to edge
 - **Text**: system, rounded, serif, mono or VT323; interface and page size
 - **Layout**: tabs on top or in a sidebar (left or right); five tab styles;

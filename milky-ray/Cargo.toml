@@ -1,6 +1,6 @@
 [package]
 name = "milky-ray"
-version = "1.4.0"
+version = "1.5.0"
 edition = "2021"
 description = "Lunar Browser Milky Ray: a fully customizable browser with Lunar Search"
 license = "MIT"

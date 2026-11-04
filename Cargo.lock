@@ -1977,7 +1977,7 @@ checksum = "5d15f86d12da44cd8d4ec3c73984537eb7f4cadcb9776a575a0a8a05ca11005c"
 
 [[package]]
 name = "lunar-browser"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "eframe",
  "flate2",
@@ -2025,7 +2025,7 @@ dependencies = [
 
 [[package]]
 name = "milky-ray"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "gtk",
  "lunar-browser",

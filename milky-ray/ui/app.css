@@ -48,7 +48,7 @@ body::before {
   background: var(--wallpaper);
   background-size: cover;
   background-position: center;
-  opacity: var(--window-opacity);
+  opacity: max(var(--window-opacity), 0.012);
 }
 body.stars::after {
   content: "";
@@ -143,6 +143,8 @@ body.platform-macos.tabs-side.right #toolbar { padding-left: 82px; }
 .tab .close .i { width: 12px; height: 12px; }
 .tab:hover .close, .tab.active .close { visibility: visible; }
 .tab .close:hover { background: var(--hover); color: var(--text); }
+.tab.asleep .title { opacity: 0.55; }
+.tab.asleep .mark { background: transparent; box-shadow: inset 0 0 0 1px var(--border-strong); }
 .tab.drop-before::before { content: ""; position: absolute; left: -2px; top: 7px; bottom: 7px; width: 2px; background: var(--accent); }
 
 body.tab-box .tab { border-radius: var(--radius) var(--radius) 0 0; border-bottom: 0; height: 32px; margin-bottom: -1px; }
@@ -298,3 +300,21 @@ textarea.tall { min-height: 260px; }
 #toasts { position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 6px; z-index: 20; pointer-events: none; }
 .toast { padding: 8px 12px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border-strong); font-size: 12px; animation: rise 0.15s ease-out; }
 @keyframes rise { from { transform: translateY(6px); opacity: 0; } }
+
+body.see-through { --hover: color-mix(in srgb, var(--bg1) 45%, transparent); }
+body.see-through #tabstrip, body.see-through #toolbar, body.see-through #sidebar, body.see-through #bookmarksbar, body.see-through #statusbar {
+  text-shadow: 0 0 2px color-mix(in srgb, var(--bg1) 90%, transparent), 0 1px 6px color-mix(in srgb, var(--bg1) 70%, transparent);
+}
+body.see-through .icon-btn, body.see-through .tab, body.see-through .side-new, body.see-through #bookmarksbar a { color: var(--text); }
+body.see-through .icon-btn .i, body.see-through .tab .close .i { filter: drop-shadow(0 0 1.5px var(--bg1)) drop-shadow(0 1px 3px var(--bg1)); }
+body.see-through .tab.active { background: color-mix(in srgb, var(--surface) 82%, transparent); border-color: var(--border-strong); }
+body.see-through #address-form { background: color-mix(in srgb, var(--surface) 85%, transparent); border-color: var(--border-strong); }
+body.see-through #address, body.see-through #address::placeholder { text-shadow: none; }
+body.see-through #panel { background: color-mix(in srgb, var(--bg1) max(var(--panel-alpha), 88%), transparent); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35); }
+body.see-through .toast { background: color-mix(in srgb, var(--surface) 95%, transparent); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3); }
+body.see-through #content { border-color: var(--border-strong); }
+body.see-through .tab:not(.active), body.see-through .icon-btn, body.see-through #bookmarksbar a, body.see-through .side-new {
+  background: color-mix(in srgb, var(--bg1) 42%, transparent);
+}
+body.see-through .tab:not(.active):hover, body.see-through .icon-btn:hover { background: color-mix(in srgb, var(--bg1) 62%, transparent); }
+body.see-through .tab-list, body.see-through #toolbar { gap: 4px; }

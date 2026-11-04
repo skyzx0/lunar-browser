@@ -318,6 +318,7 @@ pub struct Crawler {
     resolver: Resolver,
     jar: Mutex<CookieJar>,
     robots: Mutex<HashMap<String, Robots>>,
+    pool: http::Pool,
 }
 
 pub enum Step {
@@ -410,12 +411,13 @@ fn page_text(d: &doc::Doc) -> String {
 
 impl Crawler {
     pub fn new() -> Self {
-        Crawler { resolver: Resolver::new(), jar: Mutex::new(CookieJar::default()), robots: Mutex::new(HashMap::new()) }
+        Crawler { resolver: Resolver::new(), jar: Mutex::new(CookieJar::default()), robots: Mutex::new(HashMap::new()), pool: http::Pool::default() }
     }
 
     fn fetch(&self, url: Url) -> Result<http::Response, String> {
         let request = Request { url, method: "GET".into(), body: None };
-        http::fetch_as(request, &self.jar, &self.resolver, &format!("{CRAWLER_AGENT}/1.0 (+https://github.com/skyzx0/lunar-browser)"))
+        let agent = format!("{CRAWLER_AGENT}/1.0 (+https://github.com/skyzx0/lunar-browser)");
+        http::fetch_pooled(request, &self.jar, &self.resolver, &agent, 12 << 20, Some(&self.pool))
     }
 
     fn allowed(&self, host: &str, url: &Url) -> bool {
